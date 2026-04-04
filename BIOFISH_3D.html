@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIO-FISH 3D Model</title>
+<style>
+  * { margin:0; box-sizing:border-box; font-family:sans-serif; }
+  body { background:#eee; }
+  #tb {
+    display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px;
+    background:#e4e4e0; border-bottom:1px solid #ccc; align-items:center;
+  }
+  .b {
+    background:#fff; border:1px solid #bbb; border-radius:5px;
+    padding:4px 10px; font-size:12px; cursor:pointer; color:#333;
+  }
+  .b:hover { background:#eee; }
+  .b.on { background:#cce4ff; border-color:#66aadd; }
+  .sep { width:1px; height:16px; background:#ccc; margin:0 3px; }
+  #cw { position:relative; height:calc(100vh - 46px); }
+  canvas { width:100%; height:100%; display:block; cursor:grab; }
+  #ht {
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.15); color:#333; font-size:11px;
+    padding:4px 14px; border-radius:12px; pointer-events:none;
+  }
+  #ld {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:#eee;
+    font-size:15px; color:#555; gap:12px;
+  }
+  #lbar { width:220px; height:5px; background:#ddd; border-radius:3px; }
+  #lp   { width:0%; height:100%; background:#5599dd; border-radius:3px; transition:width .25s; }
+</style>
+</head>
+<body>
+
+<div id="tb">
+  <span style="font-size:12px;color:#888;margin-right:2px">View:</span>
+  <button class="b on" onclick="sv('iso',this)">Iso</button>
+  <button class="b" onclick="sv('front',this)">Front</button>
+  <button class="b" onclick="sv('back',this)">Back</button>
+  <button class="b" onclick="sv('left',this)">Left</button>
+  <button class="b" onclick="sv('right',this)">Right</button>
+  <button class="b" onclick="sv('top',this)">Top</button>
+  <span class="sep"></span>
+  <button class="b" id="bF" onclick="tg('f')">🚪 Front: Closed</button>
+  <button class="b" id="bB" onclick="tg('b')">🚪 Back: Closed</button>
+  <button class="b" id="bC" onclick="tg('c')">📟 Circuit: Closed</button>
+</div>
+
+<div id="cw">
+  <canvas id="c"></canvas>
+  <div id="ht">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+  <div id="ld">
+    <div>Loading 3D engine…</div>
+    <div id="lbar"><div id="lp"></div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ── wait for Three.js ──
+var lp = document.getElementById('lp');
+var pct = 0;
+var pi = setInterval(function(){
+  pct = Math.min(pct+10, 90);
+  lp.style.width = pct + '%';
+}, 100);
+
+window.addEventListener('load', function(){
+  clearInterval(pi);
+  lp.style.width = '100%';
+  setTimeout(function(){
+    document.getElementById('ld').style.display = 'none';
+    build();
+  }, 150);
+});
+
+function build(){
+  var R = THREE;
+  var cv = document.getElementById('c');
+
+  var ren = new R.WebGLRenderer({ canvas:cv, antialias:true });
+  ren.setPixelRatio(Math.min(devicePixelRatio, 2));
+  ren.setClearColor(0xeeeeea);
+  ren.shadowMap.enabled = true;
+  ren.shadowMap.type = R.PCFSoftShadowMap;
+
+  var scene = new R.Scene();
+  scene.background = new R.Color(0xeeeeea);
+  scene.fog = new R.Fog(0xeeeeea, 500, 900);
+
+  var cam = new R.PerspectiveCamera(38, 1, 0.1, 1000);
+
+  function resize(){
+    var w = cv.clientWidth, h = cv.clientHeight;
+    ren.setSize(w, h, false);
+    cam.aspect = w / h;
+    cam.updateProjectionMatrix();
+  }
+  resize();
+  window.addEventListener('resize', resize);
+
+  // Lighting — balanced for metallic gray appearance
+  scene.add(new R.AmbientLight(0xffffff, 0.9));
+  var sun = new R.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(160, 240, 190);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024, 1024);
+  scene.add(sun);
+  var f1 = new R.DirectionalLight(0xeef2ff, 0.5);
+  f1.position.set(-120, 80, -100); scene.add(f1);
+  var f2 = new R.DirectionalLight(0xffffff, 0.4);
+  f2.position.set(0, 50, 200); scene.add(f2);
+  var f3 = new R.DirectionalLight(0xffffff, 0.3);
+  f3.position.set(0, -80, 100); scene.add(f3);
+
+  // Floor
+  var floor = new R.Mesh(
+    new R.PlaneGeometry(500, 500),
+    new R.MeshStandardMaterial({ color:0xd8d8d4, roughness:0.9 })
+  );
+  floor.rotation.x = -Math.PI/2;
+  floor.position.y = -54;
+  floor.receiveShadow = true;
+  scene.add(floor);
+
+  // ── Materials ──
+  function mat(c, me, ro){
+    return new R.MeshStandardMaterial({
+      color: c,
+      metalness: me != null ? me : 0.88,
+      roughness: ro != null ? ro : 0.14
+    });
+  }
+  var mS   = mat(0xb2b4b4, 0.55, 0.20); // matches swatch - metallic gray
+  var mSL  = mS;
+  var mSD  = mS;
+  var mFR  = mat(0x787878, 0.50, 0.25); // borders — darker
+  var mBL  = mat(0x080a0c, 0.10, 0.90);
+  var mLC  = new R.MeshStandardMaterial({ color:0x1a55dd, emissive:0x06102a, roughness:0.08 });
+  var mKN  = mat(0xb2b4b4, 0.55, 0.20);
+  var mFA  = mat(0x141618, 0.20, 0.80);
+  var mPO  = mat(0xb2b4b4, 0.55, 0.20);
+  var mSW  = new R.MeshStandardMaterial({ color:0xfafafa, roughness:0.28 });
+  var mRed = new R.MeshStandardMaterial({ color:0xcc2200, roughness:0.40, emissive:0x220000 });
+  var mWR  = new R.MeshStandardMaterial({ color:0xcc1400, roughness:0.50, metalness:0.12 });
+  var mHB  = mat(0x787878, 0.50, 0.25);
+  var mHI  = mat(0x787878, 0.50, 0.25);
+  var mTK  = mat(0xb2b4b4, 0.55, 0.20);
+  var mVV  = mat(0xb2b4b4, 0.55, 0.20);
+  var mIN  = mat(0xb2b4b4, 0.55, 0.20);
+  var mHS  = mat(0xb2b4b4, 0.55, 0.20);
+
+  var root = new R.Group();
+  scene.add(root);
+
+  function bx(w, h, d, m, x, y, z, g){
+    var me = new R.Mesh(new R.BoxGeometry(w, h, d), m);
+    me.position.set(x, y, z);
+    me.castShadow = true; me.receiveShadow = true;
+    (g || root).add(me);
+    return me;
+  }
+  function cy(rt, rb, h, sg, m, x, y, z, rx, rz, g){
+    var me = new R.Mesh(new R.CylinderGeometry(rt, rb, h, sg || 32), m);
+    me.position.set(x, y, z);
+    if (rx != null) me.rotation.x = rx;
+    if (rz != null) me.rotation.z = rz;
+    me.castShadow = true;
+    (g || root).add(me);
+    return me;
+  }
+
+  // ── DIMENSIONS ──
+  // FRONT = +Z face  (LCD, buttons, solid oven door)
+  // BACK  = -Z face  (fans, tank doors, circuit panel)
+  // Viewer's LEFT from front = world -X  → switch here
+  // Viewer's RIGHT from front = world +X → funnel here
+  var W=120, H=80, D=58, T=0.5, PH=13, FT=2.5, WR=5;
+  var BY=-H/2, TY=H/2, DH=H-PH-FT*2, CBH=PH-FT;
+  var cr = [
+    [-W/2+FT/2, -D/2+FT/2],
+    [ W/2-FT/2, -D/2+FT/2],
+    [-W/2+FT/2,  D/2-FT/2],
+    [ W/2-FT/2,  D/2-FT/2]
+  ];
+
+  // ── FRAME ──
+  cr.forEach(function(c){ bx(FT, H, FT, mFR, c[0], 0, c[1]); });
+  [TY-FT/2, TY-PH-FT/2, BY+FT/2].forEach(function(y){
+    bx(W, FT, FT, mFR, 0, y, -D/2+FT/2);
+    bx(W, FT, FT, mFR, 0, y,  D/2-FT/2);
+    bx(FT, FT, D, mFR, -W/2+FT/2, y, 0);
+    bx(FT, FT, D, mFR,  W/2-FT/2, y, 0);
+  });
+
+  // ── CONSISTENT FACE Z POSITIONS ──
+  // Front face panels:  Z =  D/2-FT-T/2
+  // Back face panels:   Z = -D/2+FT+T/2
+  // All door panels at same Z as their face — no floating geometry
+  var FZ  =  D/2-FT-T/2;  // front face Z
+  var BZ  = -D/2+FT+T/2;  // back face Z
+
+  // Y spans (matching frame rails exactly):
+  //   Upper inner: y = TY-PH  → TY-FT   height = PH-FT,  center = TY-(PH+FT)/2
+  //   Lower inner: y = BY+FT  → TY-PH-FT height = DH,    center = BY+FT+DH/2
+  var PY2 = TY-(PH+FT)/2;  // correct panel strip center Y
+
+  // ── SHELL PANELS (all consistent) ──
+  bx(W-FT*2, T, D-FT*2, mSL, 0, TY-T/2, 0);           // ceiling
+  bx(W-FT*2, T, D-FT*2, mS,  0, BY+T/2, 0);            // floor
+  // ── LEFT & RIGHT WALLS with actual pill-shaped vent holes ──
+  var ventZ2    = -D/5;       // vent Z center on each wall
+  var ventYbase2 = BY+H*0.15;
+  var slotBody2 = 12;
+  var slotR2    = 1.8;
+  var slotGap2  = 5;
+  var wallY0 = BY+FT, wallY1 = TY-FT;          // Y extents of inner wall
+  var wallZ0 = -D/2+FT, wallZ1 = D/2-FT;       // Z extents of inner wall
+
+  function makeWallWithHoles(mirrorX, ventZpos){
+    var shape = new R.Shape();
+    shape.moveTo(wallZ0, wallY0);
+    shape.lineTo(wallZ1, wallY0);
+    shape.lineTo(wallZ1, wallY1);
+    shape.lineTo(wallZ0, wallY1);
+    shape.closePath();
+
+    for(var hi=0; hi<3; hi++){
+      var cy2 = ventYbase2 + hi*slotGap2;
+      var zc  = ventZpos;
+      var hole = new R.Path();
+      hole.moveTo(zc - slotBody2/2, cy2 - slotR2);
+      hole.lineTo(zc + slotBody2/2, cy2 - slotR2);
+      hole.absarc(zc + slotBody2/2, cy2, slotR2, -Math.PI/2, Math.PI/2, false);
+      hole.lineTo(zc - slotBody2/2, cy2 + slotR2);
+      hole.absarc(zc - slotBody2/2, cy2, slotR2, Math.PI/2, -Math.PI/2, false);
+      hole.closePath();
+      shape.holes.push(hole);
+    }
+
+    var geo = new R.ExtrudeGeometry(shape, { depth: T, bevelEnabled: false });
+    var mesh = new R.Mesh(geo, mS);
+    mesh.rotation.y = Math.PI/2;
+    var xPos = mirrorX * (W/2 - FT);
+    mesh.position.set(xPos - mirrorX*T, 0, 0);
+    if(mirrorX < 0) mesh.scale.x = -1;
+    mesh.castShadow = true; mesh.receiveShadow = true;
+    root.add(mesh);
+  }
+  makeWallWithHoles( 1,  D/5);   // right wall — vents toward FRONT (+Z)
+  makeWallWithHoles(-1, -D/5);   // left wall  — vents toward BACK  (-Z)
+  // No separate back wall — back door panels ARE the back face when closed
+  // Interior front wall (revealed when front door opens)
+  bx(W-FT*2, DH, T, mSD, 0, BY+FT+DH/2, D/2-FT-T*4);
+
+  // ── FRONT PANEL STRIP (top section, correct Y span) ──
+  bx(W-FT*2, PH-FT, T, mS, 0, PY2, FZ);
+  bx(W-FT*2-2, PH-FT-2, 0.3, mS, 0, PY2, FZ+0.3);
+  // LCD (viewer's left = world -X)
+  var lx = -W/2+FT+11;
+  bx(11, 7, 0.5, mBL, lx, PY2, FZ+0.3);
+  bx(9.5, 5.5, 0.5, mLC, lx, PY2, FZ+0.6);
+  // 4 buttons
+  for (var i=0; i<4; i++){
+    var bxi = -W/2+FT+27+i*10;
+    cy(1.8, 2.0, 1.4, 20, mBL, bxi, PY2, FZ+0.5, Math.PI/2, null);
+    cy(1.5, 1.7, 1.8, 20, mKN, bxi, PY2, FZ+1.4, Math.PI/2, null);
+  }
+
+  // ── FRONT DOOR (solid steel, hinge bottom, opens outward) ──
+  var fHY = BY+FT;
+  var fDG = new R.Group();
+  fDG.position.set(0, fHY, FZ);  // door face at same Z as panel strip
+  root.add(fDG);
+  bx(W-FT*2, DH, T, mS, 0, DH/2, 0, fDG);  // solid door panel
+  cy(0.9, 0.9, 1.3, 16, mKN, 0, DH*0.52, T+0.5, Math.PI/2, null, fDG); // latch
+
+  // Hose dispenser on interior front wall
+  var intWZ = D/2-FT-T*4;
+  cy(1.2, 1.2, 2, 18, mHS, 0, BY+FT+DH*0.09, intWZ-1, Math.PI/2, null);
+  cy(0.6, 0.6, 3, 12, mBL, 0, BY+FT+DH*0.09, intWZ-1, Math.PI/2, null);
+
+  // ── BACK UPPER SECTION ──
+  var HW = W/2-FT; // each half = W/2-FT, both together span full inner width
+
+  // LEFT half from back viewer (world +X) — STATIC, no door
+  bx(HW, PH-FT, T, mS, HW/2, PY2, BZ);
+
+  // Permanent center vertical line — indicates door split, always visible
+  bx(0.8, PH-FT, 0.8, mFR, 0, PY2, BZ-0.4);
+
+  // RIGHT half from back viewer (world -X) — CIRCUIT DOOR, hinge at bottom, opens outward
+  var cbHY = TY-PH;  // pivot at exact bottom of upper section (= top of middle frame rail)
+  var cbG = new R.Group();
+  cbG.position.set(-HW/2, cbHY, BZ); // pivot at bottom of door
+  root.add(cbG);
+  bx(HW, PH-FT, T, mS, 0, (PH-FT)/2, 0, cbG); // solid door panel — spans exactly to top frame rail
+  cy(0.65, 0.65, 0.8, 12, mKN, 0, (PH-FT)*0.55, -0.4, Math.PI/2, null, cbG); // latch
+
+  // ── BACK DOUBLE DOORS — lower half, at back face Z ──
+  var bDY = BY+FT, bdw = HW, fanR = 7;
+
+  function mkBackDoor(side){
+    var g = new R.Group();
+    g.position.set(side*(W/2-FT), bDY, BZ); // at back face Z
+    root.add(g);
+    var dc = side*(-bdw/2);
+    bx(bdw, DH, T, mS, dc, DH/2, 0, g); // solid door panel
+    // Inner-edge border flush on panel face — disappears when door opens
+    var innerX = dc + (-side)*(bdw/2-0.4);
+    bx(0.8, DH, 0.6, mFR, innerX, DH/2, -0.3, g);
+    // Fan — near outer edge (away from center seam)
+    var fx = -side*(fanR+3), fy = DH*0.25;
+    cy(fanR+1, fanR+1, T,     30, mSD, fx, fy, 0.15, Math.PI/2, null, g);
+    cy(fanR,   fanR,   T*1.5, 30, mFA, fx, fy, 0,    Math.PI/2, null, g);
+    cy(1.2, 1.2, T+0.6, 12, mHB, fx, fy, 0, Math.PI/2, null, g);
+    return g;
+  }
+  var bDLG = mkBackDoor(-1), bDRG = mkBackDoor(1);
+
+  // ── INTERIOR TANKS ──
+  var CW = (W-FT*4)/3, TR = Math.min(CW/2-2.5, 8);
+  for (var ti=0; ti<3; ti++){
+    var tx = -W/2+FT*2+CW*ti+CW/2, tb = BY+FT+T+13;
+    cy(TR, TR, 26, 32, mTK, tx, tb, 0);
+    cy(TR+1, TR+1, 0.9, 32, mTK, tx, tb-13.4, 0);
+    cy(TR, TR, 0.9, 32, mTK, tx, tb+13.4, 0);
+    cy(1.1, 1.1, 4, 16, mVV, tx, tb+16.2, 0);
+    bx(6, 0.8, 1, mVV, tx, tb+18.4, 0);
+    if (ti<2) bx(T*2, DH-2, D-FT*4, mIN, -W/2+FT*2+CW*(ti+1), bDY+(DH-2)/2, 0);
+  }
+  bx(W-FT*4, T, D-FT*4, mIN, 0, BY+FT+T*1.5, 0);
+
+  // ── SWITCH — LEFT wall (-X), BACK end of the panel strip rectangle ──
+  // "Other side" of the rectangle = back end, still on left wall
+  var swX = -W/2+FT/2, swY = TY-PH/2, swZ = -D/2+FT+10;
+  bx(T+0.9, 4.5, 7.0, mBL, swX, swY, swZ);
+  bx(T+0.6, 3.2, 5.5, mSW, swX, swY, swZ);
+  bx(T+0.9, 1.4, 2.0, mRed, swX, swY+0.5, swZ-1.0);
+
+  // ── PORTS ──
+  cy(1.8, 1.8, T+1, 20, mPO, -W/2+FT/2, BY+H*0.22, D/5, null, Math.PI/2); // glycerol left
+  cy(1.0, 1.0, T+2, 14, mBL, -W/2+FT/2, BY+H*0.22, D/5, null, Math.PI/2);
+  cy(1.8, 1.8, T+1, 20, mPO,  W/2-FT/2, BY+H*0.22, D/5, null, Math.PI/2); // water right
+  cy(1.0, 1.0, T+2, 14, mBL,  W/2-FT/2, BY+H*0.22, D/5, null, Math.PI/2);
+
+  // (ventilation holes are now cut directly into the side walls above)
+
+  // ── DIVIDER SHEET between circuit area (top) and containers (bottom) ──
+  // Runs full width and depth inside machine at the boundary height
+  var divY = TY-PH-FT;
+  bx(W-FT*2, T*2, D-FT*2, mS, 0, divY, 0); // horizontal steel sheet
+
+  // ── FUNNEL — open hollow, no gaps, no extra rings ──
+  var fX = W/2-FT-18, fZ = -D/8;
+  var mFunnel = new R.MeshStandardMaterial({
+    color:0xdde0e0, metalness:0.55, roughness:0.20, side: R.DoubleSide
+  });
+  function fcy(rt, rb, h, x, y, z){
+    var geo = new R.CylinderGeometry(rt, rb, h, 36, 1, true);
+    var me = new R.Mesh(geo, mFunnel);
+    me.position.set(x, y, z); me.castShadow = true; root.add(me);
+  }
+  // Each segment: center Y = bottom + h/2
+  // Stem:  bottom=TY+0,   h=5  → center=TY+2.5,  top=TY+5
+  // Taper: bottom=TY+5,   h=9  → center=TY+9.5,  top=TY+14
+  // Bowl:  bottom=TY+14,  h=11 → center=TY+19.5, top=TY+25
+  fcy(4.5, 4.5,  5,  fX, TY+2.5,  fZ);
+  fcy(13,  4.5,  9,  fX, TY+9.5,  fZ);
+  fcy(13,  13,   11, fX, TY+19.5, fZ);
+
+  // ── RED CASTER WHEELS directly on box bottom ──
+  cr.forEach(function(c){
+    bx(4.5, 2.5, 4.5, mSD, c[0], BY-1.2, c[1]);
+    cy(0.8, 0.8, 2, 10, mHI, c[0], BY-3.0, c[1]);
+    cy(WR, WR, 3, 28, mWR, c[0], BY-WR-2.5, c[1], null, Math.PI/2);
+    cy(1.8, 1.8, 3.2, 14, mHB, c[0], BY-WR-2.5, c[1], null, Math.PI/2);
+  });
+
+  // ── CAMERA CONTROLS ──
+  // ISO default: shows FRONT (LCD) face
+  var rX=0.25, rY=-0.5, tX=0.25, tY=-0.5, zm=1, tZ=1;
+  var drag=false, ox=0, oy=0;
+  var st = { f:false, b:false, c:false };
+  var vm = {
+    iso:   [0.25, -0.5],
+    front: [0.04,  0],
+    back:  [0.04,  Math.PI],
+    left:  [0.04, -Math.PI/2],
+    right: [0.04,  Math.PI/2],
+    top:   [1.45,  0]
+  };
+
+  window.sv = function(v, btn){
+    tX = vm[v][0]; tY = vm[v][1]; tZ = 1;
+    document.querySelectorAll('.b').forEach(function(b){ b.classList.remove('on'); });
+    if (btn) btn.classList.add('on');
+  };
+  window.tg = function(k){
+    st[k] = !st[k];
+    var lb = { f:'🚪 Front:', b:'🚪 Back:', c:'📟 Circuit:' };
+    var id = { f:'bF', b:'bB', c:'bC' };
+    document.getElementById(id[k]).textContent = lb[k] + ' ' + (st[k] ? 'Open' : 'Closed');
+    document.getElementById(id[k]).classList.toggle('on', st[k]);
+  };
+
+  cv.addEventListener('mousedown', function(e){ drag=true; ox=e.clientX; oy=e.clientY; cv.style.cursor='grabbing'; });
+  window.addEventListener('mouseup', function(){ drag=false; cv.style.cursor='grab'; });
+  cv.addEventListener('mousemove', function(e){
+    if (!drag) return;
+    tY += (e.clientX-ox)*0.007; tX += (e.clientY-oy)*0.007;
+    tX = Math.max(-1.45, Math.min(1.45, tX));
+    ox = e.clientX; oy = e.clientY;
+  });
+  cv.addEventListener('wheel', function(e){
+    tZ *= e.deltaY>0 ? 1.12 : 0.89;
+    tZ = Math.max(0.32, Math.min(3.5, tZ));
+    e.preventDefault();
+  }, { passive:false });
+
+  // Touch
+  var lt=null, lpd=null;
+  cv.addEventListener('touchstart', function(e){
+    lt = e.touches[0];
+    lpd = e.touches.length>1 ? Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY) : null;
+    e.preventDefault();
+  }, { passive:false });
+  cv.addEventListener('touchmove', function(e){
+    if (e.touches.length===2 && lpd){
+      var d = Math.hypot(e.touches[0].clientX-e.touches[1].clientX, e.touches[0].clientY-e.touches[1].clientY);
+      tZ *= lpd/d; tZ = Math.max(0.32, Math.min(3.5, tZ)); lpd = d;
+    } else if (lt){
+      tY += (e.touches[0].clientX-lt.clientX)*0.009;
+      tX += (e.touches[0].clientY-lt.clientY)*0.009;
+      tX = Math.max(-1.45, Math.min(1.45, tX));
+      lt = e.touches[0];
+    }
+    e.preventDefault();
+  }, { passive:false });
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    rX += (tX-rX)*0.1; rY += (tY-rY)*0.1; zm += (tZ-zm)*0.1;
+    // Door animations
+    fDG.rotation.x += ((st.f ? Math.PI/2 : 0) - fDG.rotation.x) * 0.12;
+    bDLG.rotation.y += ((st.b ? Math.PI/2 : 0) - bDLG.rotation.y) * 0.12;
+    bDRG.rotation.y += ((-st.b*Math.PI/2) - bDRG.rotation.y) * 0.12;
+    cbG.rotation.x  += ((-st.c*Math.PI/2) - cbG.rotation.x) * 0.12;
+    root.rotation.x = rX; root.rotation.y = rY;
+    var d = 260*zm;
+    cam.position.set(0, d*0.34, d);
+    cam.lookAt(0, 5, 0);
+    ren.render(scene, cam);
+  })();
+}
+</script>
+</body>
+</html>
