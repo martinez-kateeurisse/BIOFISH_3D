@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIO-FISH 3D Model</title>
+<style>
+  * { margin:0; box-sizing:border-box; font-family:sans-serif; }
+  body { background:#eee; }
+  #tb {
+    display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px;
+    background:#e4e4e0; border-bottom:1px solid #ccc; align-items:center;
+  }
+  .b {
+    background:#fff; border:1px solid #bbb; border-radius:5px;
+    padding:4px 10px; font-size:12px; cursor:pointer; color:#333;
+  }
+  .b:hover { background:#eee; }
+  .b.on { background:#cce4ff; border-color:#66aadd; }
+  .sep { width:1px; height:16px; background:#ccc; margin:0 3px; }
+  #cw { position:relative; height:calc(100vh - 46px); }
+  canvas { width:100%; height:100%; display:block; cursor:grab; }
+  #ht {
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.15); color:#333; font-size:11px;
+    padding:4px 14px; border-radius:12px; pointer-events:none;
+  }
+  #ld {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:#eee;
+    font-size:15px; color:#555; gap:12px;
+  }
+  #lbar { width:220px; height:5px; background:#ddd; border-radius:3px; }
+  #lp   { width:0%; height:100%; background:#5599dd; border-radius:3px; transition:width .25s; }
+</style>
+</head>
+<body>
+
+<div id="tb">
+  <span style="font-size:12px;color:#888;margin-right:2px">View:</span>
+  <button class="b on" onclick="sv('iso',this)">Iso</button>
+  <button class="b" onclick="sv('front',this)">Front</button>
+  <button class="b" onclick="sv('back',this)">Back</button>
+  <button class="b" onclick="sv('left',this)">Left</button>
+  <button class="b" onclick="sv('right',this)">Right</button>
+  <button class="b" onclick="sv('top',this)">Top</button>
+  <span class="sep"></span>
+  <button class="b" id="bF" onclick="tg('f')">🚪 Front: Closed</button>
+  <button class="b" id="bB" onclick="tg('b')">🚪 Back: Closed</button>
+  <button class="b" id="bC" onclick="tg('c')">📟 Circuit: Closed</button>
+</div>
+
+<div id="cw">
+  <canvas id="c"></canvas>
+  <div id="ht">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+  <div id="ld">
+    <div>Loading 3D engine…</div>
+    <div id="lbar"><div id="lp"></div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var lp = document.getElementById('lp');
+var pct = 0;
+var pi = setInterval(function(){
+  pct = Math.min(pct+10, 90);
+  lp.style.width = pct+'%';
+},100);
+window.addEventListener('load', function(){
+  clearInterval(pi); lp.style.width='100%';
+  setTimeout(function(){ document.getElementById('ld').style.display='none'; build(); },150);
+});
+
+function build(){
+  var R = THREE;
+  var cv = document.getElementById('c');
+  var ren = new R.WebGLRenderer({canvas:cv, antialias:true});
+  ren.setPixelRatio(Math.min(devicePixelRatio,2));
+  ren.setClearColor(0xeeeeea);
+  ren.shadowMap.enabled = true;
+  ren.shadowMap.type = R.PCFSoftShadowMap;
+
+  var scene = new R.Scene();
+  scene.background = new R.Color(0xeeeeea);
+  scene.fog = new R.Fog(0xeeeeea, 400, 700);
+
+  var cam = new R.PerspectiveCamera(38, 1, 0.1, 1000);
+  function resize(){
+    var w=cv.clientWidth, h=cv.clientHeight;
+    ren.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  // Lighting
+  scene.add(new R.AmbientLight(0xffffff, 0.9));
+  var sun = new R.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(160,240,190); sun.castShadow=true;
+  sun.shadow.mapSize.set(1024,1024); scene.add(sun);
+  var f1=new R.DirectionalLight(0xeef2ff,0.5); f1.position.set(-120,80,-100); scene.add(f1);
+  var f2=new R.DirectionalLight(0xffffff,0.4); f2.position.set(0,50,200); scene.add(f2);
+  var f3=new R.DirectionalLight(0xffffff,0.3); f3.position.set(0,-80,100); scene.add(f3);
+
+  var floor=new R.Mesh(new R.PlaneGeometry(400,400),
+    new R.MeshStandardMaterial({color:0xd8d8d4,roughness:0.9}));
+  floor.rotation.x=-Math.PI/2; floor.position.y=-36;
+  floor.receiveShadow=true; scene.add(floor);
+
+  // Materials
+  function mat(c,me,ro){
+    return new R.MeshStandardMaterial({color:c,
+      metalness:me!=null?me:0.88, roughness:ro!=null?ro:0.14});
+  }
+  var mS  =mat(0xb2b4b4,0.55,0.20);
+  var mSL =mS, mSD=mS;
+  var mFR =mat(0x787878,0.50,0.25);
+  var mBL =mat(0x080a0c,0.10,0.90);
+  var mLC =new R.MeshStandardMaterial({color:0x1a55dd,emissive:0x06102a,roughness:0.08});
+  var mKN =mat(0xb2b4b4,0.55,0.20);
+  var mFA =mat(0x141618,0.20,0.80);
+  var mPO =mat(0xb2b4b4,0.55,0.20);
+  var mSW =new R.MeshStandardMaterial({color:0xf5f5f5,roughness:0.28});   // white switch
+  var mRed=new R.MeshStandardMaterial({color:0xcc2200,roughness:0.40,emissive:0x220000});
+  var mWR =new R.MeshStandardMaterial({color:0xcc1400,roughness:0.50,metalness:0.12});
+  var mHB =mat(0x787878,0.50,0.25);
+  var mHI =mat(0x787878,0.50,0.25);
+  var mTK =mat(0xb2b4b4,0.55,0.20);
+  var mVV =mat(0xb2b4b4,0.55,0.20);
+  var mIN =mat(0xb2b4b4,0.55,0.20);
+  var mHS =mat(0xb2b4b4,0.55,0.20);
+  var mSTV=mat(0x888888,0.55,0.22);
+  var mBRN=mat(0x222222,0.20,0.80);
+  var mPCB=new R.MeshStandardMaterial({color:0x1b5e20,roughness:0.5,metalness:0.1});
+
+  var root=new R.Group(); scene.add(root);
+
+  function bx(w,h,d,m,x,y,z,g){
+    var me=new R.Mesh(new R.BoxGeometry(w,h,d),m);
+    me.position.set(x,y,z); me.castShadow=true; me.receiveShadow=true;
+    (g||root).add(me); return me;
+  }
+  function cy(rt,rb,h,sg,m,x,y,z,rx,rz,g){
+    var me=new R.Mesh(new R.CylinderGeometry(rt,rb,h,sg||32),m);
+    me.position.set(x,y,z);
+    if(rx!=null) me.rotation.x=rx;
+    if(rz!=null) me.rotation.z=rz;
+    me.castShadow=true; (g||root).add(me); return me;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  DIMENSIONS  (1 unit = 1 cm)
+  // ═══════════════════════════════════════════════════════════
+  var W=86, H=51, D=40.5, T=0.5, PH=12.5, FT=2.5, WR=2.5;
+  var BY=-H/2, TY=H/2;          // BY=-25.5  TY=25.5
+  var DH=H-PH-FT*2;             // lower door height = 33.5
+  var divY=TY-PH-FT;            // upper/lower sheet  = 10.5
+
+  // Bay X-centres  (28.5 + 29 + 28.5 = 86)
+  var B1W=28.5, B2W=29, B3W=28.5;
+  var B1X=-W/2+B1W/2+1.5;           // -28.75
+  var B2X=-W/2+B1W+B2W/2;       //   0.0
+  var B3X= W/2-B3W/2-1.5;           //  28.75  ← funnel side, "first container"
+  var D1X=-W/2+B1W;             // -14.5
+  var D2X= W/2-B3W;             //  14.5
+
+  // Container: main Ø20 (R=10), cover Ø21 (R=10.5), H=20
+  var CH=20, CR=10, CCR=10.5;
+  var stoveFloor = BY+T;     // inner lower floor  = -22.5
+  var stoveTopY  = stoveFloor+1+4; // stove plate top = -17.5
+  // Bay 1 & 3 containers sit ON the stove; bay 2 sits on floor
+  var tb13 = stoveTopY+CH/2+1;    //  -7.5  (bays 1 & 3)
+  var tb2  = stoveFloor+CH/2+1;   // -12.5  (bay 2)
+
+  // Corner posts
+  var cr=[
+    [-W/2+FT/2,-D/2+FT/2],[W/2-FT/2,-D/2+FT/2],
+    [-W/2+FT/2, D/2-FT/2],[W/2-FT/2, D/2-FT/2]
+  ];
+  var FZ= D/2-FT-T/2;           // front face Z = +17.5
+  var BZ=-D/2+FT+T/2;           // back  face Z = -17.5
+  var PY2=TY-(PH+FT)/2;         // upper strip centre Y = 18.0
+
+  // ── FRAME ──
+  cr.forEach(function(c){ bx(FT,H,FT,mFR,c[0],0,c[1]); });
+  [TY-FT/2, TY-PH-FT/2, BY+FT/2].forEach(function(y){
+    bx(W,FT,FT,mFR,0,y,-D/2+FT/2); bx(W,FT,FT,mFR,0,y,D/2-FT/2);
+    bx(FT,FT,D,mFR,-W/2+FT/2,y,0); bx(FT,FT,D,mFR,W/2-FT/2,y,0);
+  });
+
+  // ── SHELL ──
+  bx(W-FT*2,T,D-FT*2,mSL,0,TY-T/2,0);   // ceiling
+  bx(W-FT*2,T,D-FT*2,mS, 0,BY+T/2,0);   // floor
+
+  // Side walls with vent slots  7.5 × 1 cm
+  var vBase=BY+H*0.18, sLen=7.5, sR=0.5, sGap=3.0;
+  var wY0=BY+FT, wY1=TY-FT, wZ0=-D/2+FT, wZ1=D/2-FT;
+  function makeWall(mx,vZ){
+    var sh=new R.Shape();
+    sh.moveTo(wZ0,wY0); sh.lineTo(wZ1,wY0);
+    sh.lineTo(wZ1,wY1); sh.lineTo(wZ0,wY1); sh.closePath();
+    for(var i=0;i<3;i++){
+      var cy2=vBase+i*sGap, zc=vZ, h2=new R.Path();
+      h2.moveTo(zc-sLen/2,cy2-sR); h2.lineTo(zc+sLen/2,cy2-sR);
+      h2.absarc(zc+sLen/2,cy2,sR,-Math.PI/2,Math.PI/2,false);
+      h2.lineTo(zc-sLen/2,cy2+sR);
+      h2.absarc(zc-sLen/2,cy2,sR,Math.PI/2,-Math.PI/2,false);
+      h2.closePath(); sh.holes.push(h2);
+    }
+    var geo=new R.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});
+    var mesh=new R.Mesh(geo,mS);
+    mesh.rotation.y=Math.PI/2;
+    var xp=mx*(W/2-FT); mesh.position.set(xp-mx*T,0,0);
+    if(mx<0) mesh.scale.x=-1;
+    mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+  }
+  makeWall( 1, D/5); makeWall(-1,-D/5);
+
+  // Interior front wall
+  bx(W-FT*2,DH,T,mSD,0,BY+FT+DH/2,D/2-FT-T*4);
+
+  // ── FRONT PANEL STRIP (upper section) ──
+  bx(W-FT*2,PH-FT,T,mS,0,PY2,FZ);
+  bx(W-FT*2-2,PH-FT-2,0.3,mS,0,PY2,FZ+0.3);
+  // LCD 10×4 cm
+  var lx=-W/2+FT+8;
+  bx(10,4,0.5,mBL,lx,PY2,FZ+0.3);
+  bx(8.5,3,0.5,mLC,lx,PY2,FZ+0.6);
+  // 4 buttons Ø=2 (R=1), 2 cm physical gap from LCD right edge and from each other
+  // LCD right edge = lx+5 = -27.5 → btn1 centre = -27.5+2+1 = -24.5, step = 2+2 = 4
+  for(var i=0;i<4;i++){
+    var bxi=-24.5+i*4;
+    cy(1.0,1.1,1.2,20,mBL, bxi,PY2,FZ+0.5, Math.PI/2,null);
+    cy(0.85,0.95,1.6,20,mKN,bxi,PY2,FZ+1.4, Math.PI/2,null);
+  }
+
+  // ── FRONT DOOR (no circular latch — handles are on the back doors) ──
+  var fHY=BY+FT;
+  var fDG=new R.Group(); fDG.position.set(0,fHY,FZ); root.add(fDG);
+  bx(W-FT*2,DH,T,mS,0,DH/2,0,fDG);
+
+  // Hose dispensing hole Ø=1 cm on interior front wall
+  var intWZ=D/2-FT-T*4;
+  cy(0.5,0.5,2.5,12,mBL, B2X,BY+FT+DH*0.09,intWZ-1, Math.PI/2,null);
+  cy(1.0,1.0,1.2,16,mHS, B2X,BY+FT+DH*0.09,intWZ-1.8,Math.PI/2,null);
+
+  // ── SUPPORT CHAINS — visible only when front door opens ──
+  // Each chain connects a wall bracket (fixed) to a door bracket (moves with fDG).
+  // The chain group is re-oriented every frame to span between the two anchors.
+  var mChain=new R.MeshStandardMaterial({color:0xb8b8b8,metalness:0.92,roughness:0.09});
+  var nLk=20, lkR=0.5, lkTR=0.13, lkSp=lkR*1.95;
+  var natLen=nLk*lkSp;       // natural group height ≈ 24.6 cm (scaled at runtime)
+
+  function mkChain(){
+    var g=new R.Group();
+    for(var i=0;i<nLk;i++){
+      var t=new R.Mesh(new R.TorusGeometry(lkR,lkTR,6,8),mChain);
+      t.position.y=(i-nLk/2+0.5)*lkSp;
+      if(i%2===1) t.rotation.y=Math.PI/2;   // alternate links 90° — chain-link look
+      g.add(t);
+    }
+    g.visible=false; root.add(g); return g;
+  }
+  var chainL=mkChain(), chainR=mkChain();
+
+  // Anchor X = inner edge of corner posts (where door edge meets frame)
+  var cAncX =W/2-FT;          // = 40.5
+  var cDoorY=DH*1;         // = 21.775  chain attaches 65% up the door
+  var cFrmY =fHY+cDoorY;      // = -1.225  world Y of fixed frame anchor
+
+  // Wall brackets — fixed, front face of left/right frame rails
+  bx(2.2,2.2,1.4,mFR, -cAncX,cFrmY,FZ+0.7);
+  bx(2.2,2.2,1.4,mFR,  cAncX,cFrmY,FZ+0.7);
+  // Door brackets — move with door (children of fDG)
+  bx(2.2,2.2,1.4,mFR, -cAncX,cDoorY,0.7, fDG);
+  bx(2.2,2.2,1.4,mFR,  cAncX,cDoorY,0.7, fDG);
+
+  // Cached objects to avoid per-frame allocation
+  var _dir=new R.Vector3(), _yUp=new R.Vector3(0,1,0), _qq=new R.Quaternion();
+  function updateChain(ch,ax,ay,az,bx2,by2,bz2){
+    var dx=bx2-ax,dy=by2-ay,dz=bz2-az;
+    var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(len<2.0){ ch.visible=false; return; }
+    ch.visible=true;
+    ch.position.set((ax+bx2)/2,(ay+by2)/2,(az+bz2)/2);
+    _dir.set(dx,dy,dz).normalize();
+    _qq.setFromUnitVectors(_yUp,_dir);
+    ch.quaternion.copy(_qq);
+    ch.scale.y=len/natLen;
+  }
+
+  // ── BACK UPPER SECTION ──
+  var HW=W/2-FT;   // half-width = 20.25
+  bx(HW,PH-FT,T,mS,HW/2,PY2,BZ);                     // static half
+  bx(0.8,PH-FT,0.8,mFR,0,PY2,BZ-0.4);                 // centre split
+
+  var cbHY=TY-PH;
+  var cbG=new R.Group(); cbG.position.set(-HW/2,cbHY,BZ); root.add(cbG);
+  bx(HW,PH-FT,T,mS,0,(PH-FT)/2,0,cbG);
+  cy(0.65,0.65,0.8,12,mKN,0,(PH-FT)*0.55,-0.4,Math.PI/2,null,cbG);
+
+  // Circuit board — laid FLAT (horizontal) in upper section, W=21 cm
+  var pcbCX=-HW/2;
+  var pcbY=divY+T+1.5;
+  bx(21,T*2,D-FT*4-2,mPCB,pcbCX,pcbY,0);
+  [[-5,3],[0,-4],[5,3]].forEach(function(c){
+    bx(3.0,1.5,2.0,mBL,pcbCX+c[0],pcbY+T+0.75,c[1]);
+  });
+
+  // ── BACK DOUBLE DOORS — lower section ──
+  var bDY=BY+FT, bdw=HW, fanR=3.5;
+  function mkBackDoor(side){
+    var g=new R.Group();
+    g.position.set(side*(W/2-FT),bDY,BZ);
+    root.add(g);
+    var dc=side*(-bdw/2);
+    bx(bdw,DH,T,mS,dc,DH/2,0,g);
+    var innerX=dc+(-side)*(bdw/2-0.4);
+    bx(0.8,DH,0.6,mFR,innerX,DH/2,-0.3,g);
+    // Fan: hole Ø=7, frame Ø=8
+    var fx=-side*(fanR+3.5), fy=DH*0.28;
+    cy(fanR+0.5,fanR+0.5,T,   28,mSD,fx,fy,0.15,Math.PI/2,null,g);
+    cy(fanR,fanR,T*1.5,        28,mFA,fx,fy,0,   Math.PI/2,null,g);
+    cy(1.0,1.0,T+0.5,          12,mHB,fx,fy,0,   Math.PI/2,null,g);
+    // Door handle — flat bar, 1.8 cm tall, 1 cm from inner edge, NOT circular
+    var hx=dc+(-side)*(bdw/2-2);   // 1 cm from inner (centre-seam) edge
+    bx(1.8,1.2,1.5,mKN,hx,DH*0.5,-(T/2+0.75),g);  // flat rectangular bar
+    return g;
+  }
+  var bDLG=mkBackDoor(-1), bDRG=mkBackDoor(1);
+
+  // ── STOVE in bays 1 & 3 (lower section, containers sit on top) ──
+  [B1X,B3X].forEach(function(sx){
+    [[-8,-8],[-8,8],[8,-8],[8,8]].forEach(function(lp2){
+      bx(1.5,1,1.5,mFR,sx+lp2[0],stoveFloor+0.5,lp2[1]);
+    });
+    bx(21,4,21,mSTV,sx,stoveFloor+1+2,0);
+    [-5,5].forEach(function(boff){
+      var ring=new R.Mesh(new R.TorusGeometry(2.5,0.55,8,24),mBRN);
+      ring.rotation.x=Math.PI/2;
+      ring.position.set(sx+boff,stoveFloor+5.1,0);
+      root.add(ring);
+    });
+  });
+
+  // ── CONTAINERS ×3 ──
+  // Bays 1 & 3 on stove (tb13=-7.5); bay 2 on floor (tb2=-12.5)
+  [[B1X,tb13],[B2X,tb2],[B3X,tb13]].forEach(function(p){
+    var tx=p[0], tb=p[1];
+    cy(CR,CR,CH,32,mTK,tx,tb,0);
+    cy(CR+0.8,CR+0.8,1.0,32,mTK,tx,tb-CH/2-0.5,0);
+    cy(CCR,CCR,1.5,32,mTK,tx,tb+CH/2+0.75,0);
+    cy(1.1,1.1,2.0,16,mVV,tx,tb+CH/2+2.0,0);
+    bx(4,0.7,0.9,mVV,tx,tb+CH/2+3.5,0);
+  });
+
+  // Bay divider panels
+  bx(T*2,DH-2,D-FT*4,mIN,D1X,bDY+(DH-2)/2,0);
+  bx(T*2,DH-2,D-FT*4,mIN,D2X,bDY+(DH-2)/2,0);
+  //bx(W-FT*4,T,D-FT*4,mIN,0,BY+FT+T*1.5,0);
+
+  // Upper / lower divider sheet
+  bx(W-FT*2,T*2,D-FT*2,mS,0,divY,0);
+
+  // ── SWITCH — landscape, WHITE, on left wall upper section ──
+  var swX=-W/2+FT/2, swY=TY-PH/2, swZ=-D/2+FT+8;
+  bx(T+0.9,2.3,3.0,mSW,swX,swY,swZ);       // white housing (landscape: 3 wide, 2.3 tall)
+  bx(T+0.6,1.4,2.2,mSW,swX,swY,swZ);       // rocker
+  bx(T+0.9,0.8,0.8,mRed,swX,swY+0.5,swZ-0.7); // indicator dot
+
+  // Side ports Ø=1 cm
+  cy(0.5,0.5,T+2,14,mBL,-W/2+FT/2,BY+H*0.22,D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mHS,-W/2+FT/2,BY+H*0.22,D/5,null,Math.PI/2);
+  cy(0.5,0.5,T+2,14,mBL, W/2-FT/2,BY+H*0.22,D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mHS, W/2-FT/2,BY+H*0.22,D/5,null,Math.PI/2);
+
+  // ── FUNNEL — on RIGHT side (B3X), reaches container 1 ──
+  //   Bowl:  Ø=13 (R=6.5), H=6.5   — topmost, above taper
+  //   Taper: R=6.5→3.25,  H=7      — above machine top
+  //   Tube:  Ø=6.5 (R=3.25), H=23.5 — 3 cm visible above ceiling, 20.5 cm inside
+  //          visible portion: TY → TY+3  (sticks up outside machine)
+  //          inside portion:  TY → TY-20.5 = y=5.0  (near container cover)
+  var fX=B3X, fZ=-D/8+5;
+  var mFun=new R.MeshStandardMaterial({
+    color:0xdde0e0, metalness:0.55, roughness:0.20, side:R.DoubleSide
+  });
+  function fcy(rt,rb,h,x,y,z){
+    var geo=new R.CylinderGeometry(rt,rb,h,36,1,true);
+    var me=new R.Mesh(geo,mFun);
+    me.position.set(x,y,z); me.castShadow=true; root.add(me);
+  }
+  // Tube: 3 cm above ceiling + 20.5 cm inside = 23.5 cm total
+  // Centre of tube = (TY+3 + TY-20.5)/2 = TY - 8.75 = 16.75
+  fcy(3.25,3.25,23.5, fX, TY-8.75, fZ);
+  // Taper: sits from TY+3 upward, H=7, centre = TY+3+3.5 = 32.0
+  fcy(6.5,3.25,7.0,   fX, TY+6.5,  fZ);
+  // Bowl: sits above taper, H=6.5, centre = TY+3+7+3.25 = 38.75
+  fcy(6.5,6.5,6.5,    fX, TY+13.0, fZ);
+
+  // ── MACHINE HANDLES — slim rounded steel, LEFT & RIGHT side walls ──
+  // Grab bar: thin cylinder (R=0.65) 13 cm long along Z, offset from wall
+  // Two slim mounting brackets connect bar to wall
+  var hY=12, hR=0.65, hLen=13, hOff=2;
+  [[-W/2,-1],[W/2,1]].forEach(function(ws){
+    var wx=ws[0], s=ws[1];
+    var barX=wx+s*hOff;
+    // Grab bar along Z (rx=π/2 rotates default-Y cylinder to point along Z)
+    cy(hR,hR,hLen,12,mFR, barX,hY,0, Math.PI/2,null);
+    // Front bracket along X (rz=π/2 rotates cylinder to point along X)
+    cy(hR,hR,hOff,8,mFR, wx+s*hOff/2,hY,-(hLen/2-1.5), null,Math.PI/2);
+    // Back bracket
+    cy(hR,hR,hOff,8,mFR, wx+s*hOff/2,hY, (hLen/2-1.5), null,Math.PI/2);
+  });
+
+  // ── CASTER WHEELS Ø=5 (R=2.5), T=2 cm ──
+  cr.forEach(function(c){
+    bx(3.5,2.0,3.5,mSD,c[0],BY-1.0,c[1]);
+    cy(0.6,0.6,1.5,10,mHI,c[0],BY-2.2,c[1]);
+    cy(WR,WR,2,28,mWR,c[0],BY-WR-2,c[1],null,Math.PI/2);
+    cy(1.2,1.2,2.2,14,mHB,c[0],BY-WR-2,c[1],null,Math.PI/2);
+  });
+
+  // ── CAMERA CONTROLS ──
+  var rX=0.25,rY=-0.5,tX=0.25,tY=-0.5,zm=1,tZ=1;
+  var drag=false,ox=0,oy=0;
+  var st={f:false,b:false,c:false};
+  var vm={iso:[0.25,-0.5],front:[0.04,0],back:[0.04,Math.PI],
+    left:[0.04,-Math.PI/2],right:[0.04,Math.PI/2],top:[1.45,0]};
+
+  window.sv=function(v,btn){
+    tX=vm[v][0]; tY=vm[v][1]; tZ=1;
+    document.querySelectorAll('.b').forEach(function(b){b.classList.remove('on');});
+    if(btn) btn.classList.add('on');
+  };
+  window.tg=function(k){
+    st[k]=!st[k];
+    var lb={f:'🚪 Front:',b:'🚪 Back:',c:'📟 Circuit:'};
+    var id={f:'bF',b:'bB',c:'bC'};
+    document.getElementById(id[k]).textContent=lb[k]+' '+(st[k]?'Open':'Closed');
+    document.getElementById(id[k]).classList.toggle('on',st[k]);
+  };
+
+  cv.addEventListener('mousedown',function(e){drag=true;ox=e.clientX;oy=e.clientY;cv.style.cursor='grabbing';});
+  window.addEventListener('mouseup',function(){drag=false;cv.style.cursor='grab';});
+  cv.addEventListener('mousemove',function(e){
+    if(!drag)return;
+    tY+=(e.clientX-ox)*0.007; tX+=(e.clientY-oy)*0.007;
+    tX=Math.max(-1.45,Math.min(1.45,tX));
+    ox=e.clientX; oy=e.clientY;
+  });
+  cv.addEventListener('wheel',function(e){
+    tZ*=e.deltaY>0?1.12:0.89;
+    tZ=Math.max(0.32,Math.min(3.5,tZ));
+    e.preventDefault();
+  },{passive:false});
+  var lt=null,lpd=null;
+  cv.addEventListener('touchstart',function(e){
+    lt=e.touches[0];
+    lpd=e.touches.length>1?Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY):null;
+    e.preventDefault();
+  },{passive:false});
+  cv.addEventListener('touchmove',function(e){
+    if(e.touches.length===2&&lpd){
+      var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+        e.touches[0].clientY-e.touches[1].clientY);
+      tZ*=lpd/d; tZ=Math.max(0.32,Math.min(3.5,tZ)); lpd=d;
+    }else if(lt){
+      tY+=(e.touches[0].clientX-lt.clientX)*0.009;
+      tX+=(e.touches[0].clientY-lt.clientY)*0.009;
+      tX=Math.max(-1.45,Math.min(1.45,tX));
+      lt=e.touches[0];
+    }
+    e.preventDefault();
+  },{passive:false});
+
+  (function loop(){
+    requestAnimationFrame(loop);
+    rX+=(tX-rX)*0.1; rY+=(tY-rY)*0.1; zm+=(tZ-zm)*0.1;
+    fDG.rotation.x +=((st.f?Math.PI/2:0)-fDG.rotation.x)*0.12;
+    bDLG.rotation.y+=((st.b?Math.PI/2:0)-bDLG.rotation.y)*0.12;
+    bDRG.rotation.y+=((-st.b*Math.PI/2)-bDRG.rotation.y)*0.12;
+    cbG.rotation.x +=((-st.c*Math.PI/2)-cbG.rotation.x)*0.12;
+    // Chain: door-anchor world pos derived from current door angle each frame
+    var ang=fDG.rotation.x;
+    if(ang>0.06){
+      var wY=fHY+cDoorY*Math.cos(ang);   // door anchor swings in Y
+      var wZ=FZ +cDoorY*Math.sin(ang);   // door anchor swings in Z
+      updateChain(chainL, -cAncX,cFrmY,FZ, -cAncX,wY,wZ);
+      updateChain(chainR,  cAncX,cFrmY,FZ,  cAncX,wY,wZ);
+    } else {
+      chainL.visible=false; chainR.visible=false;
+    }
+    root.rotation.x=rX; root.rotation.y=rY;
+    var d=190*zm;
+    cam.position.set(0,d*0.34,d);
+    cam.lookAt(0,5,0);
+    ren.render(scene,cam);
+  })();
+}
+</script>
+</body>
+</html>
