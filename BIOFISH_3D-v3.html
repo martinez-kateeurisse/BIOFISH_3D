@@ -6,7 +6,7 @@
 <title>BIO-FISH 3D Model</title>
 <style>
   * { margin:0; box-sizing:border-box; font-family:sans-serif; }
-  body { background:#eee; }
+  body { background:#fff; }
   #tb {
     display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px;
     background:#e4e4e0; border-bottom:1px solid #ccc; align-items:center;
@@ -27,7 +27,7 @@
   }
   #ld {
     position:absolute; inset:0; display:flex; flex-direction:column;
-    align-items:center; justify-content:center; background:#eee;
+    align-items:center; justify-content:center; background:#fff;
     font-size:15px; color:#555; gap:12px;
   }
   #lbar { width:220px; height:5px; background:#ddd; border-radius:3px; }
@@ -80,13 +80,13 @@ function build(){
   var cv = document.getElementById('c');
   var ren = new R.WebGLRenderer({canvas:cv, antialias:true});
   ren.setPixelRatio(Math.min(devicePixelRatio,2));
-  ren.setClearColor(0xeeeeea);
+  ren.setClearColor(0xffffff); 
   ren.shadowMap.enabled = true;
   ren.shadowMap.type = R.PCFSoftShadowMap;
 
   var scene = new R.Scene();
-  scene.background = new R.Color(0xeeeeea);
-  scene.fog = new R.Fog(0xeeeeea, 400, 700);
+  scene.background = new R.Color(0xffffff); 
+  scene.fog = new R.Fog(0xffffff, 400, 700); 
 
   var cam = new R.PerspectiveCamera(38, 1, 0.1, 1000);
   function resize(){
@@ -122,9 +122,9 @@ function build(){
   }
 
   // Primary surfaces
-  var mBody  = mat(0xbec0c3, 0.38, 0.52);  // All panels, shells, tanks — light silver-grey
-  var mFrame = mat(0xa4a7ab, 0.50, 0.50);  // Structural frame, knobs, valves — light steel grey
-  var mDark  = mat(0x0e1012, 0.15, 0.85);  // Vents, fans, sensors, port inner — near black
+  var mBody  = mat(0xbec0c3, 0.38, 0.52);  
+  var mFrame = mat(0xa4a7ab, 0.50, 0.50);  
+  var mDark  = mat(0x0e1012, 0.15, 0.85);  
 
   // Screen & indicators
   var mLCD   = new R.MeshStandardMaterial({color:0x1a55dd, emissive:0x06102a, roughness:0.40});
@@ -135,14 +135,14 @@ function build(){
 
   // Caster wheels
   var mWheel = new R.MeshStandardMaterial({color:0xcc1400, roughness:0.80, metalness:0.10});
-  var mHub   = mat(0x828487, 0.30, 0.75);  // Wheel hubs & stems — mid grey
+  var mHub   = mat(0x828487, 0.30, 0.75);  
 
   // Mechanical / thermal components
-  var mStove  = mat(0x8c8f92, 0.22, 0.80); // Stove blocks — slightly warmer grey
-  var mBurner = mat(0x1e2022, 0.28, 0.80); // Burner rings — very dark
+  var mStove  = mat(0x8c8f92, 0.22, 0.80); 
+  var mBurner = mat(0x1e2022, 0.28, 0.80); 
   var mPCB    = new R.MeshStandardMaterial({color:0x1b5e20, roughness:0.8, metalness:0.1});
 
-  // Funnel — light brushed-aluminium feel
+  // Funnel
   var mFunnel = new R.MeshStandardMaterial({
     color:0xc8cacc, metalness:0.60, roughness:0.40, side:R.DoubleSide
   });
@@ -163,7 +163,7 @@ function build(){
   }
 
   // ═══════════════════════════════════════════════════════════
-  //  DIMENSIONS  (1 unit = 1 cm)
+  //  DIMENSIONS
   // ═══════════════════════════════════════════════════════════
   var W=86, H=51, D=40.5, T=0.5, PH=12.5, FT=2.5, WR=2.5;
   var BY=-H/2, TY=H/2;
@@ -199,12 +199,10 @@ function build(){
   });
 
   // ── SHELL ──
-  bx(W-FT*2,T,D-FT*2,mBody,0,TY-T/2,0);   // top
-  bx(W-FT*2,T,D-FT*2,mBody,0,BY+T/2,0);   // bottom
+  bx(W-FT*2,T,D-FT*2,mBody,0,TY-T/2,0);   
+  bx(W-FT*2,T,D-FT*2,mBody,0,BY+T/2,0);   
 
-  // ── SIDE WALLS WITH VENT SLOTS ──
-  // FIX: both walls use the same vZ = D/5 so vents appear at the same
-  //      relative fore-aft position on each side → consistent from any viewpoint
+  // ── SIDE WALLS ──
   var vBase=BY+H*0.18, sLen=7.5, sR=0.5, sGap=3.0;
   var wY0=BY+FT, wY1=TY-FT, wZ0=-D/2+FT, wZ1=D/2-FT;
   function makeWall(mx,vZ){
@@ -226,18 +224,13 @@ function build(){
     if(mx<0) mesh.scale.x=-1;
     mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
   }
-  // Both use the same absolute Z offset but with opposite sign so that
-  // each wall's vents sit on the viewer's LEFT side of that surface:
-  //   right wall: vZ = +D/5 → world Z = −D/5 (toward back from right-viewer's left)
-  //   left wall:  vZ = −D/5 → world Z = −D/5 (toward back = left-viewer's left)
   makeWall( 1,  D/5);
   makeWall(-1, -D/5);
 
-  // Interior front wall — flush with door plane (FZ-T) so no pocket
-  // is visible on either side when the front door swings open
+  // Interior front wall
   bx(W-FT*2,DH,T,mBody,0,BY+FT+DH/2,FZ-T);
 
-  // ── FRONT PANEL STRIP (upper section) ──
+  // ── FRONT PANEL STRIP ──
   bx(W-FT*2,PH-FT,T,mBody,0,PY2,FZ);
   bx(W-FT*2-2,PH-FT-2,0.3,mBody,0,PY2,FZ+0.3);
 
@@ -246,15 +239,14 @@ function build(){
   bx(10,4,0.5,mDark,lx,PY2,FZ+0.3);
   bx(8.5,3,0.5,mLCD,lx,PY2,FZ+0.6);
 
-  // 2 remaining buttons (i=2 and i=3) — kept at their original X positions
+  // Buttons
   for(var i=2;i<4;i++){
     var bxi=-24.5+i*4;
     cy(1.0,1.1,1.2,20,mDark,  bxi,PY2,FZ+0.5, Math.PI/2,null);
     cy(0.85,0.95,1.6,20,mFrame,bxi,PY2,FZ+1.4, Math.PI/2,null);
   }
 
-  // ── BIOFISH LABEL PLATE (space cleared by removing first two buttons) ──
-  // Canvas texture: light panel background + blue 'BIOFISH' text
+  // ── BIOFISH LABEL PLATE ──
   var _lc=document.createElement('canvas');
   _lc.width=256; _lc.height=80;
   var _cx=_lc.getContext('2d');
@@ -269,7 +261,6 @@ function build(){
   var mLabelFace=new R.MeshStandardMaterial({map:_lt,roughness:0.50,metalness:0.10});
   var mPlate=mat(0xc6c8cc,0.22,0.62);
   var _pg=new R.BoxGeometry(8.5,3.2,0.5);
-  // Face order: +X, -X, +Y, -Y, +Z (front/viewer-facing), -Z
   var _pm=new R.Mesh(_pg,[mPlate,mPlate,mPlate,mPlate,mLabelFace,mPlate]);
   _pm.position.set(-22.5,PY2,FZ+0.45);
   _pm.castShadow=true; root.add(_pm);
@@ -392,25 +383,21 @@ function build(){
   // Upper / lower divider sheet
   bx(W-FT*2,T*2,D-FT*2,mBody,0,divY,0);
 
-  // ── ROCKER SWITCH (left side wall) ──
-  // The outer face of the thin wall sheet between frame corners is at X = -(W/2-FT) = -40.5.
-  // Centre the switch box so its inner face lands exactly on that surface.
-  var swX = -(W/2-FT) - 1.5/2;      // = -41.25  (inner face flush with wall outer face)
+  // ── ROCKER SWITCH ──
+  var swX = -(W/2-FT) - 1.5/2;
   var swY = TY-PH/2;
   var swZ = -D/2+FT+8;
   bx(1.5, 2.3, 3.0, mSwWht, swX, swY, swZ);
   bx(1.2, 1.4, 2.2, mSwWht, swX, swY, swZ);
   bx(1.5, 0.8, 0.8, mSwRed, swX, swY+0.5, swZ-0.7);
 
-  // Side ports (both sides, symmetric)
+  // Side ports
   cy(0.5,0.5,T+2,14,mDark,-W/2+FT/2,BY+H*0.22, D/5,null,Math.PI/2);
   cy(1.0,1.0,T+1,16,mBody,-W/2+FT/2,BY+H*0.22, D/5,null,Math.PI/2);
   cy(0.5,0.5,T+2,14,mDark, W/2-FT/2,BY+H*0.22, D/5,null,Math.PI/2);
   cy(1.0,1.0,T+1,16,mBody, W/2-FT/2,BY+H*0.22, D/5,null,Math.PI/2);
 
-  // ── FUNNEL (B3 bay — right bay) ──
-  // FIX: straight tube is now entirely inside the chassis.
-  //      Only the flared cone and the wide mouth appear above the top panel.
+  // ── FUNNEL ──
   var fX=B3X, fZ=-D/8+5;
 
   function fcy(rt,rb,h,x,y,z){
@@ -419,20 +406,13 @@ function build(){
     me.position.set(x,y,z); me.castShadow=true; root.add(me);
   }
 
-  // Tube: from just above containers (≈ y=5) up to just below the top panel (TY−1).
-  // It lives entirely inside the machine — not visible from outside.
   var fTubeBot = 5.0;
-  var fTubeTop = TY - 1.0;           // flush below the top panel
+  var fTubeTop = TY - 1.0;
   var fTubeH   = fTubeTop - fTubeBot;
   var fTubeCY  = (fTubeBot + fTubeTop) / 2;
-  fcy(3.25, 3.25, fTubeH, fX, fTubeCY, fZ);   // straight tube — hidden inside
-
-  // Cone: starts right at the top panel surface, flares outward.
-  // Bottom = TY−0.5 (just above top panel), Top = TY+6.5
-  fcy(6.5, 3.25, 7.0, fX, TY+3.0, fZ);        // diagonal cone — visible outside
-
-  // Mouth: wide open hopper sitting above the cone.
-  fcy(6.5, 6.5, 6.5, fX, TY+9.75, fZ);        // wide mouth — visible outside
+  fcy(3.25, 3.25, fTubeH, fX, fTubeCY, fZ);
+  fcy(6.5, 3.25, 7.0, fX, TY+3.0, fZ);
+  fcy(6.5, 6.5, 6.5, fX, TY+9.75, fZ);
 
   // ── MACHINE HANDLES ──
   var hY=12, hR=0.65, hLen=13, hOff=2;
@@ -453,48 +433,56 @@ function build(){
   });
 
   // ══════════════════════════════════════════════════════════════
-  //  DIMENSIONS — per view
-  //  One THREE.Group per view (child of root → rotates with machine).
-  //  Only the active view's group is shown when dims are ON.
+  //  DIMENSIONS
   // ══════════════════════════════════════════════════════════════
   var dimGroups={}, dimCurView='iso', dimOn=false;
 
   var _DLM  = new R.LineBasicMaterial({color:0x1144cc,depthTest:false,transparent:true,opacity:0.90});
   var _DLME = new R.LineBasicMaterial({color:0x8899bb,depthTest:false,transparent:true,opacity:0.55});
 
-  // helpers — all take a group as first arg
   function _DL(g,pts,ext){
     var l=new R.Line(new R.BufferGeometry().setFromPoints(
-      pts.map(function(p){return new R.Vector3(p[0],p[1],p[2]);})),
-      ext?_DLME:_DLM);
+      pts.map(function(p){return new R.Vector3(p[0],p[1],p[2]);})),ext?_DLME:_DLM);
     l.renderOrder=5; g.add(l);
   }
   function _DT(g,x,y,z,dx,dy,dz,s){
-    s=s||2;
-    _DL(g,[[x-dx*s,y-dy*s,z-dz*s],[x+dx*s,y+dy*s,z+dz*s]]);
+    s=s||2; _DL(g,[[x-dx*s,y-dy*s,z-dz*s],[x+dx*s,y+dy*s,z+dz*s]]);
   }
+  
   function _DS(g,text,x,y,z,w){
-    w=w||15;
-    var cv2=document.createElement('canvas'); cv2.width=200; cv2.height=56;
+    w=(w||15) * 1.5; 
+    var cv2=document.createElement('canvas'); 
+    cv2.width=340; cv2.height=72; 
     var ct=cv2.getContext('2d');
-    ct.fillStyle='rgba(228,240,255,0.95)'; ct.fillRect(0,0,200,56);
-    ct.strokeStyle='#1144cc'; ct.lineWidth=2; ct.strokeRect(2,2,196,52);
-    ct.fillStyle='#0d2e99'; ct.font='bold 24px Arial';
-    ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(text,100,28);
+    ct.fillStyle='rgba(228,240,255,0.95)'; ct.fillRect(0,0,340,72);
+    ct.strokeStyle='#1144cc'; ct.lineWidth=3; ct.strokeRect(3,3,334,66);
+    ct.fillStyle='#0d2e99'; ct.font='bold 34px Arial'; 
+    ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(text,170,36);
     var sp=new R.Sprite(new R.SpriteMaterial(
       {map:new R.CanvasTexture(cv2),depthTest:false,transparent:true,sizeAttenuation:true}));
-    sp.position.set(x,y,z); sp.scale.set(w,w*(56/200),1);
+    sp.position.set(x,y,z); sp.scale.set(w,w*(72/340),1);
     sp.renderOrder=6; g.add(sp);
   }
 
-  ['iso','front','back','left','right','top'].forEach(function(v){
+  ['iso','front','back','left','right','top','backOpen','frontOpen'].forEach(function(v){
     var gr=new R.Group(); gr.visible=false; root.add(gr); dimGroups[v]=gr;
   });
 
-  var _o=7, _wYb=BY-WR*2-7; // standard offset; W annotation Y level
+  var _o=7, _wYb=BY-WR*2-7;
 
-  // ── ISO: W, H, D, PH ────────────────────────────────────────
-  // front+left+top visible; lines on right/bottom/front edges
+  var _fX=B3X, _fZd=-D/8+5;          
+  var _fTop=TY+13, _fMR=6.5, _fTR=3.25;  
+
+  function _addFH(g){
+    var fx2=_fX+_fMR+4;
+    _DL(g,[[_fX+_fMR,TY,_fZd],[fx2+2,TY,_fZd]],1);
+    _DL(g,[[_fX+_fMR,_fTop,_fZd],[fx2+2,_fTop,_fZd]],1);
+    _DL(g,[[fx2,TY,_fZd],[fx2,_fTop,_fZd]]);
+    _DT(g,fx2,TY,_fZd,0,1,0); _DT(g,fx2,_fTop,_fZd,0,1,0);
+    _DS(g,'FH = 13 cm',fx2+12,TY+6.5,_fZd,13);
+  }
+
+  // ── ISO ──
   (function(g){
     var wZ=D/2+_o;
     _DL(g,[[-W/2,BY,D/2],[-W/2,_wYb,wZ]],1); _DL(g,[[W/2,BY,D/2],[W/2,_wYb,wZ]],1);
@@ -503,164 +491,262 @@ function build(){
     _DS(g,'W = 86 cm',0,_wYb,wZ+2);
 
     var hX=W/2+_o;
-    _DL(g,[[W/2,BY,D/2],[hX+2,BY,D/2]],1); _DL(g,[[W/2,TY,D/2],[hX+2,TY,D/2]],1);
-    _DL(g,[[hX,BY,D/2],[hX,TY,D/2]]);
-    _DT(g,hX,BY,D/2,0,1,0); _DT(g,hX,TY,D/2,0,1,0);
-    _DS(g,'H = 51 cm',hX+9,0,D/2);
+    _DL(g,[[W/2,BY,D/2],[hX+4,BY,D/2]],1); _DL(g,[[W/2,TY,D/2],[hX+4,TY,D/2]],1);
+    _DL(g,[[hX+2,BY,D/2],[hX+2,TY,D/2]]);
+    _DT(g,hX+2,BY,D/2,0,1,0); _DT(g,hX+2,TY,D/2,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,D/2);
 
     var dX=W/2+_o, dYY=BY-9;
-    _DL(g,[[W/2,BY,-D/2],[dX+2,dYY,-D/2]],1); _DL(g,[[W/2,BY,D/2],[dX+2,dYY,D/2]],1);
-    _DL(g,[[dX,dYY,-D/2],[dX,dYY,D/2]]);
-    _DT(g,dX,dYY,-D/2,0,0,1); _DT(g,dX,dYY,D/2,0,0,1);
-    _DS(g,'D = 40.5 cm',dX+9,dYY,0);
+    _DL(g,[[W/2,BY,-D/2],[dX+4,dYY,-D/2]],1); _DL(g,[[W/2,BY,D/2],[dX+4,dYY,D/2]],1);
+    _DL(g,[[dX+2,dYY,-D/2],[dX+2,dYY,D/2]]);
+    _DT(g,dX+2,dYY,-D/2,0,0,1); _DT(g,dX+2,dYY,D/2,0,0,1);
+    _DS(g,'D = 40.5 cm',dX+14,dYY,0);
 
     var pX=W/2+_o*2.6;
-    _DL(g,[[W/2,TY-PH,D/2],[pX+2,TY-PH,D/2]],1); _DL(g,[[W/2,TY,D/2],[pX+2,TY,D/2]],1);
-    _DL(g,[[pX,TY-PH,D/2],[pX,TY,D/2]]);
-    _DT(g,pX,TY-PH,D/2,0,1,0); _DT(g,pX,TY,D/2,0,1,0);
-    _DS(g,'PH = 12.5 cm',pX+9,TY-PH/2,D/2,14);
+    _DL(g,[[W/2,TY-PH,D/2],[pX+4,TY-PH,D/2]],1); _DL(g,[[W/2,TY,D/2],[pX+4,TY,D/2]],1);
+    _DL(g,[[pX+2,TY-PH,D/2],[pX+2,TY,D/2]]);
+    _DT(g,pX+2,TY-PH,D/2,0,1,0); _DT(g,pX+2,TY,D/2,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,D/2,14);
+
+    _addFH(g);
   })(dimGroups.iso);
 
-  // ── FRONT: W, H, PH, B1W, B2W, B3W ─────────────────────────
-  // looking at front face (Z+); annotations on bottom / right / above
+  // ── FRONT ──
   (function(g){
-    var fZ=D/2;
-    _DL(g,[[-W/2,BY,fZ],[-W/2,_wYb,fZ+_o]],1); _DL(g,[[W/2,BY,fZ],[W/2,_wYb,fZ+_o]],1);
-    _DL(g,[[-W/2,_wYb,fZ+_o],[W/2,_wYb,fZ+_o]]);
-    _DT(g,-W/2,_wYb,fZ+_o,1,0,0); _DT(g,W/2,_wYb,fZ+_o,1,0,0);
-    _DS(g,'W = 86 cm',0,_wYb,fZ+_o+2);
+    var fZ2=D/2;
+
+    var topY = TY + 18; 
+    _DL(g,[[-W/2,TY,fZ2],[-W/2,topY,fZ2]],1); 
+    _DL(g,[[W/2,TY,fZ2],[W/2,topY,fZ2]],1);
+    _DL(g,[[-W/2,topY,fZ2],[W/2,topY,fZ2]]);
+    _DT(g,-W/2,topY,fZ2,1,0,0); _DT(g,W/2,topY,fZ2,1,0,0);
+    _DS(g,'W = 86 cm',0,topY+5,fZ2, 14);
 
     var hX=W/2+_o;
-    _DL(g,[[W/2,BY,fZ],[hX+2,BY,fZ]],1); _DL(g,[[W/2,TY,fZ],[hX+2,TY,fZ]],1);
-    _DL(g,[[hX,BY,fZ],[hX,TY,fZ]]);
-    _DT(g,hX,BY,fZ,0,1,0); _DT(g,hX,TY,fZ,0,1,0);
-    _DS(g,'H = 51 cm',hX+9,0,fZ);
+    _DL(g,[[W/2,BY,fZ2],[hX+4,BY,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[hX+4,TY,fZ2]],1);
+    _DL(g,[[hX+2,BY,fZ2],[hX+2,TY,fZ2]]);
+    _DT(g,hX+2,BY,fZ2,0,1,0); _DT(g,hX+2,TY,fZ2,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,fZ2);
 
     var pX=W/2+_o*2.6;
-    _DL(g,[[W/2,TY-PH,fZ],[pX+2,TY-PH,fZ]],1); _DL(g,[[W/2,TY,fZ],[pX+2,TY,fZ]],1);
-    _DL(g,[[pX,TY-PH,fZ],[pX,TY,fZ]]);
-    _DT(g,pX,TY-PH,fZ,0,1,0); _DT(g,pX,TY,fZ,0,1,0);
-    _DS(g,'PH = 12.5 cm',pX+9,TY-PH/2,fZ,14);
+    _DL(g,[[W/2,TY-PH,fZ2],[pX+4,TY-PH,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[pX+4,TY,fZ2]],1);
+    _DL(g,[[pX+2,TY-PH,fZ2],[pX+2,TY,fZ2]]);
+    _DT(g,pX+2,TY-PH,fZ2,0,1,0); _DT(g,pX+2,TY,fZ2,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,fZ2,14);
 
-    var bYt=TY+6;
-    _DL(g,[[-W/2,TY,fZ],[-W/2,bYt,fZ]],1); _DL(g,[[D1X,TY,fZ],[D1X,bYt,fZ]],1);
-    _DL(g,[[D2X,TY,fZ],[D2X,bYt,fZ]],1);   _DL(g,[[W/2,TY,fZ],[W/2,bYt,fZ]],1);
-    _DL(g,[[-W/2,bYt,fZ],[D1X,bYt,fZ]]); _DL(g,[[D1X,bYt,fZ],[D2X,bYt,fZ]]); _DL(g,[[D2X,bYt,fZ],[W/2,bYt,fZ]]);
-    _DT(g,-W/2,bYt,fZ,1,0,0); _DT(g,D1X,bYt,fZ,1,0,0); _DT(g,D2X,bYt,fZ,1,0,0); _DT(g,W/2,bYt,fZ,1,0,0);
-    _DS(g,'B1W = 28.5',(-W/2+D1X)/2,bYt+4.5,fZ,13);
-    _DS(g,'B2W = 29',0,bYt+4.5,fZ,12);
-    _DS(g,'B3W = 28.5',(D2X+W/2)/2,bYt+4.5,fZ,13);
+    var fdXl = -W/2+FT, fdXr = W/2-FT, fdY = BY+FT+6; 
+    _DL(g, [[fdXl, BY+FT, fZ2], [fdXl, fdY, fZ2]], 1);
+    _DL(g, [[fdXr, BY+FT, fZ2], [fdXr, fdY, fZ2]], 1);
+    _DL(g, [[fdXl, fdY, fZ2], [fdXr, fdY, fZ2]]);
+    _DT(g, fdXl, fdY, fZ2, 1,0,0); _DT(g, fdXr, fdY, fZ2, 1,0,0);
+    _DS(g, 'DW = 81 cm', 0, fdY+6, fZ2, 12);
+
+    var fdhX = -W/2+FT+8; 
+    _DL(g, [[fdhX, BY+FT, fZ2], [fdhX, divY, fZ2]]);
+    _DT(g, fdhX, BY+FT, fZ2, 0,1,0); _DT(g, fdhX, divY, fZ2, 0,1,0);
+    _DS(g, 'DH = 33.5 cm', fdhX+12, BY+FT+DH/2, fZ2, 14);
+
+    var lx=-W/2+FT+8; 
+    var lcdYt=PY2+2, lcdYb=PY2-2, lcdXl=lx-5, lcdXr=lx+5;
+    
+    var lcdWy = PY2 + 8; 
+    _DL(g, [[lcdXl, lcdYt, fZ2], [lcdXl, lcdWy, fZ2]], 1);
+    _DL(g, [[lcdXr, lcdYt, fZ2], [lcdXr, lcdWy, fZ2]], 1);
+    _DL(g, [[lcdXl, lcdWy, fZ2], [lcdXr, lcdWy, fZ2]]);
+    _DT(g, lcdXl, lcdWy, fZ2, 0,1,0); _DT(g, lcdXr, lcdWy, fZ2, 0,1,0);
+    _DS(g, 'LCD W=10', lx, lcdWy+7, fZ2, 10);
+
+    var lcdHx = lx - 12; 
+    _DL(g, [[lcdXl, lcdYb, fZ2], [lcdHx, lcdYb, fZ2]], 1);
+    _DL(g, [[lcdXl, lcdYt, fZ2], [lcdHx, lcdYt, fZ2]], 1);
+    _DL(g, [[lcdHx, lcdYb, fZ2], [lcdHx, lcdYt, fZ2]]);
+    _DT(g, lcdHx, lcdYb, fZ2, 1,0,0); _DT(g, lcdHx, lcdYt, fZ2, 1,0,0);
+    _DS(g, 'LCD H=4', lcdHx-9, PY2, fZ2, 10);
+
+    _addFH(g);
   })(dimGroups.front);
 
-  // ── BACK: W, H, PH ──────────────────────────────────────────
-  // looking at back face (Z-); annotations on bottom / right / above
+  // ── BACK ──
   (function(g){
     var bkZ=-D/2;
     _DL(g,[[-W/2,BY,bkZ],[-W/2,_wYb,bkZ-_o]],1); _DL(g,[[W/2,BY,bkZ],[W/2,_wYb,bkZ-_o]],1);
     _DL(g,[[-W/2,_wYb,bkZ-_o],[W/2,_wYb,bkZ-_o]]);
     _DT(g,-W/2,_wYb,bkZ-_o,1,0,0); _DT(g,W/2,_wYb,bkZ-_o,1,0,0);
-    _DS(g,'W = 86 cm',0,_wYb,bkZ-_o-2);
+    _DS(g,'W = 86 cm',0,_wYb,bkZ-_o-4);
 
     var hX=W/2+_o;
-    _DL(g,[[W/2,BY,bkZ],[hX+2,BY,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[hX+2,TY,bkZ]],1);
-    _DL(g,[[hX,BY,bkZ],[hX,TY,bkZ]]);
-    _DT(g,hX,BY,bkZ,0,1,0); _DT(g,hX,TY,bkZ,0,1,0);
-    _DS(g,'H = 51 cm',hX+9,0,bkZ);
+    _DL(g,[[W/2,BY,bkZ],[hX+4,BY,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[hX+4,TY,bkZ]],1);
+    _DL(g,[[hX+2,BY,bkZ],[hX+2,TY,bkZ]]);
+    _DT(g,hX+2,BY,bkZ,0,1,0); _DT(g,hX+2,TY,bkZ,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,bkZ);
 
     var pX=W/2+_o*2.6;
-    _DL(g,[[W/2,TY-PH,bkZ],[pX+2,TY-PH,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[pX+2,TY,bkZ]],1);
-    _DL(g,[[pX,TY-PH,bkZ],[pX,TY,bkZ]]);
-    _DT(g,pX,TY-PH,bkZ,0,1,0); _DT(g,pX,TY,bkZ,0,1,0);
-    _DS(g,'PH = 12.5 cm',pX+9,TY-PH/2,bkZ,14);
+    _DL(g,[[W/2,TY-PH,bkZ],[pX+4,TY-PH,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[pX+4,TY,bkZ]],1);
+    _DL(g,[[pX+2,TY-PH,bkZ],[pX+2,TY,bkZ]]);
+    _DT(g,pX+2,TY-PH,bkZ,0,1,0); _DT(g,pX+2,TY,bkZ,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,bkZ,14);
+
+    var doorMidY = BY + FT + DH*0.75; 
+    var dRx = W/2 - FT;
+    _DL(g, [[0, BY+FT, bkZ], [0, doorMidY, bkZ]], 1);
+    _DL(g, [[dRx, BY+FT, bkZ], [dRx, doorMidY, bkZ]], 1);
+    _DL(g, [[0, doorMidY, bkZ], [dRx, doorMidY, bkZ]]);
+    _DT(g, 0, doorMidY, bkZ, 1, 0, 0); _DT(g, dRx, doorMidY, bkZ, 1, 0, 0);
+    _DS(g, 'DW = 40.5 cm', dRx/2, doorMidY + 6, bkZ, 14);
+
+    var bdhX = -W/2+FT+8; 
+    _DL(g, [[bdhX, BY+FT, bkZ], [bdhX, divY, bkZ]]);
+    _DT(g, bdhX, BY+FT, bkZ, 0,1,0); _DT(g, bdhX, divY, bkZ, 0,1,0);
+    _DS(g, 'DH = 33.5 cm', bdhX+12, BY+FT+DH/2, bkZ, 14);
+
+    _addFH(g);
   })(dimGroups.back);
 
-  // ── LEFT: H, D, PH ──────────────────────────────────────────
-  // camera at -X looking +X; viewer's right = +Z (front of machine).
-  // Annotation lines sit on the left face (X = -W/2), offset in +Z.
+  // ── LEFT ──
   (function(g){
     var lX=-W/2;
     var hZ=D/2+_o;
-    _DL(g,[[lX,BY,D/2],[lX,BY,hZ+2]],1); _DL(g,[[lX,TY,D/2],[lX,TY,hZ+2]],1);
-    _DL(g,[[lX,BY,hZ],[lX,TY,hZ]]);
-    _DT(g,lX,BY,hZ,0,1,0); _DT(g,lX,TY,hZ,0,1,0);
-    _DS(g,'H = 51 cm',lX,0,hZ+9);
+    _DL(g,[[lX,BY,D/2],[lX,BY,hZ+4]],1); _DL(g,[[lX,TY,D/2],[lX,TY,hZ+4]],1);
+    _DL(g,[[lX,BY,hZ+2],[lX,TY,hZ+2]]);
+    _DT(g,lX,BY,hZ+2,0,1,0); _DT(g,lX,TY,hZ+2,0,1,0);
+    _DS(g,'H = 51 cm',lX,0,hZ+12);
 
     var dYY=BY-_o;
     _DL(g,[[lX,BY,-D/2],[lX,dYY,-D/2]],1); _DL(g,[[lX,BY,D/2],[lX,dYY,D/2]],1);
     _DL(g,[[lX,dYY,-D/2],[lX,dYY,D/2]]);
     _DT(g,lX,dYY,-D/2,0,0,1); _DT(g,lX,dYY,D/2,0,0,1);
-    _DS(g,'D = 40.5 cm',lX,dYY-4.5,0);
+    _DS(g,'D = 40.5 cm',lX,dYY-6,0);
 
     var pZ=D/2+_o*2.6;
-    _DL(g,[[lX,TY-PH,D/2],[lX,TY-PH,pZ+2]],1); _DL(g,[[lX,TY,D/2],[lX,TY,pZ+2]],1);
-    _DL(g,[[lX,TY-PH,pZ],[lX,TY,pZ]]);
-    _DT(g,lX,TY-PH,pZ,0,1,0); _DT(g,lX,TY,pZ,0,1,0);
-    _DS(g,'PH = 12.5 cm',lX,TY-PH/2,pZ+9,14);
+    _DL(g,[[lX,TY-PH,D/2],[lX,TY-PH,pZ+4]],1); _DL(g,[[lX,TY,D/2],[lX,TY,pZ+4]],1);
+    _DL(g,[[lX,TY-PH,pZ+2],[lX,TY,pZ+2]]);
+    _DT(g,lX,TY-PH,pZ+2,0,1,0); _DT(g,lX,TY,pZ+2,0,1,0);
+    _DS(g,'PH = 12.5 cm',lX,TY-PH/2,pZ+14,14);
+
+    _addFH(g);
   })(dimGroups.left);
 
-  // ── RIGHT: H, D, PH, CH, CR ─────────────────────────────────
-  // camera at +X looking -X; annotations on right face (X = W/2), offset in +Z.
+  // ── RIGHT ──
   (function(g){
     var rX2=W/2;
     var hZ=D/2+_o;
-    _DL(g,[[rX2,BY,D/2],[rX2,BY,hZ+2]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,hZ+2]],1);
-    _DL(g,[[rX2,BY,hZ],[rX2,TY,hZ]]);
-    _DT(g,rX2,BY,hZ,0,1,0); _DT(g,rX2,TY,hZ,0,1,0);
-    _DS(g,'H = 51 cm',rX2,0,hZ+9);
+    _DL(g,[[rX2,BY,D/2],[rX2,BY,hZ+4]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,hZ+4]],1);
+    _DL(g,[[rX2,BY,hZ+2],[rX2,TY,hZ+2]]);
+    _DT(g,rX2,BY,hZ+2,0,1,0); _DT(g,rX2,TY,hZ+2,0,1,0);
+    _DS(g,'H = 51 cm',rX2,0,hZ+12);
 
     var dYY=BY-_o;
     _DL(g,[[rX2,BY,-D/2],[rX2,dYY,-D/2]],1); _DL(g,[[rX2,BY,D/2],[rX2,dYY,D/2]],1);
     _DL(g,[[rX2,dYY,-D/2],[rX2,dYY,D/2]]);
     _DT(g,rX2,dYY,-D/2,0,0,1); _DT(g,rX2,dYY,D/2,0,0,1);
-    _DS(g,'D = 40.5 cm',rX2,dYY-4.5,0);
+    _DS(g,'D = 40.5 cm',rX2,dYY-6,0);
 
     var pZ=D/2+_o*2.6;
-    _DL(g,[[rX2,TY-PH,D/2],[rX2,TY-PH,pZ+2]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,pZ+2]],1);
-    _DL(g,[[rX2,TY-PH,pZ],[rX2,TY,pZ]]);
-    _DT(g,rX2,TY-PH,pZ,0,1,0); _DT(g,rX2,TY,pZ,0,1,0);
-    _DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+9,14);
-
-    var chX=B2X+CR+5;
-    _DL(g,[[B2X+CR,tb2-CH/2,0],[chX,tb2-CH/2,0]],1);
-    _DL(g,[[B2X+CR,tb2+CH/2,0],[chX,tb2+CH/2,0]],1);
-    _DL(g,[[chX,tb2-CH/2,0],[chX,tb2+CH/2,0]]);
-    _DT(g,chX,tb2-CH/2,0,0,1,0); _DT(g,chX,tb2+CH/2,0,0,1,0);
-    _DS(g,'CH = 20 cm',chX+8,tb2,0,13);
-
-    var crY=tb2+CH/2+2;
-    _DL(g,[[B2X,crY,0],[B2X+CR,crY,0]]);
-    _DT(g,B2X,crY,0,0,0,1,1.5); _DT(g,B2X+CR,crY,0,0,0,1,1.5);
-    _DS(g,'CR = 10 cm',B2X+CR/2,crY+4.5,0,12);
+    _DL(g,[[rX2,TY-PH,D/2],[rX2,TY-PH,pZ+4]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,pZ+4]],1);
+    _DL(g,[[rX2,TY-PH,pZ+2],[rX2,TY,pZ+2]]);
+    _DT(g,rX2,TY-PH,pZ+2,0,1,0); _DT(g,rX2,TY,pZ+2,0,1,0);
+    _DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
   })(dimGroups.right);
 
-  // ── TOP: W, D, B1W, B2W, B3W ────────────────────────────────
-  // camera looks almost straight down; annotate in the XZ plane at Y ≈ TY.
+  // ── TOP ──
   (function(g){
-    var tYY=TY+2; // float annotations just above the top surface
-    // W = 86 (front edge of top, along X)
+    var tYY=TY+2;
     var wZ2=D/2+_o;
     _DL(g,[[-W/2,TY,D/2],[-W/2,tYY,wZ2]],1); _DL(g,[[W/2,TY,D/2],[W/2,tYY,wZ2]],1);
     _DL(g,[[-W/2,tYY,wZ2],[W/2,tYY,wZ2]]);
     _DT(g,-W/2,tYY,wZ2,1,0,0); _DT(g,W/2,tYY,wZ2,1,0,0);
-    _DS(g,'W = 86 cm',0,tYY,wZ2+2);
+    _DS(g,'L = 86 cm',0,tYY,wZ2+4);
 
-    // D = 40.5 (right edge of top, along Z)
     var dX2=W/2+_o;
-    _DL(g,[[W/2,TY,-D/2],[dX2,tYY,-D/2]],1); _DL(g,[[W/2,TY,D/2],[dX2,tYY,D/2]],1);
-    _DL(g,[[dX2,tYY,-D/2],[dX2,tYY,D/2]]);
-    _DT(g,dX2,tYY,-D/2,0,0,1); _DT(g,dX2,tYY,D/2,0,0,1);
-    _DS(g,'D = 40.5 cm',dX2+9,tYY,0);
+    _DL(g,[[W/2,TY,-D/2],[dX2+4,tYY,-D/2]],1); _DL(g,[[W/2,TY,D/2],[dX2+4,tYY,D/2]],1);
+    _DL(g,[[dX2+2,tYY,-D/2],[dX2+2,tYY,D/2]]);
+    _DT(g,dX2+2,tYY,-D/2,0,0,1); _DT(g,dX2+2,tYY,D/2,0,0,1);
+    _DS(g,'W = 40.5 cm',dX2+14,tYY,0);
 
-    // B1W, B2W, B3W (across back of top surface)
-    var bZ2=-(D/4), bYt2=tYY+5;
-    _DL(g,[[-W/2,TY,bZ2],[-W/2,bYt2,bZ2]],1); _DL(g,[[D1X,TY,bZ2],[D1X,bYt2,bZ2]],1);
-    _DL(g,[[D2X,TY,bZ2],[D2X,bYt2,bZ2]],1);   _DL(g,[[W/2,TY,bZ2],[W/2,bYt2,bZ2]],1);
-    _DL(g,[[-W/2,bYt2,bZ2],[D1X,bYt2,bZ2]]); _DL(g,[[D1X,bYt2,bZ2],[D2X,bYt2,bZ2]]); _DL(g,[[D2X,bYt2,bZ2],[W/2,bYt2,bZ2]]);
-    _DT(g,-W/2,bYt2,bZ2,1,0,0); _DT(g,D1X,bYt2,bZ2,1,0,0); _DT(g,D2X,bYt2,bZ2,1,0,0); _DT(g,W/2,bYt2,bZ2,1,0,0);
-    _DS(g,'B1W = 28.5',(-W/2+D1X)/2,bYt2+4.5,bZ2,13);
-    _DS(g,'B2W = 29',0,bYt2+4.5,bZ2,12);
-    _DS(g,'B3W = 28.5',(D2X+W/2)/2,bYt2+4.5,bZ2,13);
+    // ---> Funnel dimensions placed at _fTop <---
+    var mZ = _fZd + 16; 
+    _DL(g, [[_fX-_fMR, _fTop, _fZd+_fMR+1], [_fX-_fMR, _fTop, mZ]], 1);
+    _DL(g, [[_fX+_fMR, _fTop, _fZd+_fMR+1], [_fX+_fMR, _fTop, mZ]], 1);
+    _DL(g, [[_fX-_fMR, _fTop, mZ], [_fX+_fMR, _fTop, mZ]]);
+    _DT(g, _fX-_fMR, _fTop, mZ, 0,0,1); _DT(g, _fX+_fMR, _fTop, mZ, 0,0,1);
+    _DS(g, 'Mouth ∅ 13 cm', _fX, _fTop, mZ+4, 14);
+
+    var tX_off = _fX - 16; 
+    _DL(g, [[_fX-_fMR-1, _fTop, _fZd-_fTR], [tX_off, _fTop, _fZd-_fTR]], 1);
+    _DL(g, [[_fX-_fMR-1, _fTop, _fZd+_fTR], [tX_off, _fTop, _fZd+_fTR]], 1);
+    _DL(g, [[tX_off, _fTop, _fZd-_fTR], [tX_off, _fTop, _fZd+_fTR]]);
+    _DT(g, tX_off, _fTop, _fZd-_fTR, 1,0,0); _DT(g, tX_off, _fTop, _fZd+_fTR, 1,0,0);
+    _DS(g, 'Tube ∅ 6.5 cm', tX_off-8, _fTop, _fZd, 13);
   })(dimGroups.top);
+
+  // ── BACK OPEN ──
+  (function(g){
+    var bkZ=-D/2;
+    var bYt=BY+FT+3;
+    _DL(g,[[-W/2+FT,BY+FT,bkZ],[-W/2+FT,bYt,bkZ]],1); _DL(g,[[D1X,BY+FT,bkZ],[D1X,bYt,bkZ]],1);
+    _DL(g,[[D2X,BY+FT,bkZ],[D2X,bYt,bkZ]],1); _DL(g,[[W/2-FT,BY+FT,bkZ],[W/2-FT,bYt,bkZ]],1);
+    _DL(g,[[-W/2+FT,bYt,bkZ],[D1X,bYt,bkZ]]); _DL(g,[[D1X,bYt,bkZ],[D2X,bYt,bkZ]]); _DL(g,[[D2X,bYt,bkZ],[W/2-FT,bYt,bkZ]]);
+    _DT(g,-W/2+FT,bYt,bkZ,1,0,0); _DT(g,D1X,bYt,bkZ,1,0,0); _DT(g,D2X,bYt,bkZ,1,0,0); _DT(g,W/2-FT,bYt,bkZ,1,0,0);
+    
+    _DS(g,'B1W = 28.5',(-W/2+FT+D1X)/2,bYt-7,bkZ,13);
+    _DS(g,'B2W = 29',0,bYt-15,bkZ,12); 
+    _DS(g,'B3W = 28.5',(D2X+W/2-FT)/2,bYt-7,bkZ,13);
+
+    [[B1X,tb13,1],[B2X,tb2,2],[B3X,tb13,3]].forEach(function(p){
+      var cx=p[0], cby=p[1], ci=p[2];
+      var dY3=cby+CH/2+3.5; 
+      _DL(g,[[cx-CR,cby+CH/2,bkZ],[cx-CR,dY3,bkZ]],1);
+      _DL(g,[[cx+CR,cby+CH/2,bkZ],[cx+CR,dY3,bkZ]],1);
+      _DL(g,[[cx-CR,dY3,bkZ],[cx+CR,dY3,bkZ]]);
+      _DT(g,cx-CR,dY3,bkZ,0,0,1,1.5); _DT(g,cx+CR,dY3,bkZ,0,0,1,1.5);
+      _DS(g,'C'+ci+' ∅ 20 cm',cx,dY3+6,bkZ,13);
+      
+      var hX3=cx+CR+6; 
+      _DL(g,[[cx+CR,cby-CH/2,bkZ],[hX3+2,cby-CH/2,bkZ]],1);
+      _DL(g,[[cx+CR,cby+CH/2,bkZ],[hX3+2,cby+CH/2,bkZ]],1);
+      _DL(g,[[hX3,cby-CH/2,bkZ],[hX3,cby+CH/2,bkZ]]);
+      _DT(g,hX3,cby-CH/2,bkZ,0,1,0); _DT(g,hX3,cby+CH/2,bkZ,0,1,0);
+      _DS(g,'CH = 20 cm',hX3+13,cby,bkZ,13);
+    });
+  })(dimGroups.backOpen);
+
+  // ── FRONT OPEN ──
+  (function(g){
+    var fZ2 = D/2;
+
+    var topY = TY + 18; 
+    _DL(g,[[-W/2,TY,fZ2],[-W/2,topY,fZ2]],1); 
+    _DL(g,[[W/2,TY,fZ2],[W/2,topY,fZ2]],1);
+    _DL(g,[[-W/2,topY,fZ2],[W/2,topY,fZ2]]);
+    _DT(g,-W/2,topY,fZ2,1,0,0); _DT(g,W/2,topY,fZ2,1,0,0);
+    _DS(g,'Front W = 86 cm',0,topY+5,fZ2, 14);
+
+    var hX = W/2+_o;
+    _DL(g,[[W/2,BY,fZ2],[hX+4,BY,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[hX+4,TY,fZ2]],1);
+    _DL(g,[[hX+2,BY,fZ2],[hX+2,TY,fZ2]]);
+    _DT(g,hX+2,BY,fZ2,0,1,0); _DT(g,hX+2,TY,fZ2,0,1,0);
+    _DS(g,'Front H = 51 cm',hX+14,0,fZ2, 14);
+
+    var tY = BY + FT; 
+    var tZb = FZ; 
+    var tZf = FZ + DH; 
+    var tXl = -W/2 + FT, tXr = W/2 - FT;
+
+    var zLine = tZf + 10; 
+    _DL(g, [[tXl, tY, tZf], [tXl, tY, zLine+1]], 1);
+    _DL(g, [[tXr, tY, tZf], [tXr, tY, zLine+1]], 1);
+    _DL(g, [[tXl, tY, zLine], [tXr, tY, zLine]]);
+    _DT(g, tXl, tY, zLine, 1,0,0); _DT(g, tXr, tY, zLine, 1,0,0);
+    _DS(g, 'Tray L = 81 cm', 0, tY+6, zLine+4, 14);
+
+    var xLine = tXr + 10; 
+    _DL(g, [[tXr, tY, tZb], [xLine+1, tY, tZb]], 1);
+    _DL(g, [[tXr, tY, tZf], [xLine+1, tY, tZf]], 1);
+    _DL(g, [[xLine, tY, tZb], [xLine, tY, tZf]]);
+    _DT(g, xLine, tY, tZb, 0,0,1); _DT(g, xLine, tY, tZf, 0,0,1);
+    _DS(g, 'Tray W = 33.5 cm', xLine+14, tY+6, (tZb+tZf)/2, 16);
+
+  })(dimGroups.frontOpen);
 
   // ── CAMERA CONTROLS ──
   var rX=0.25,rY=-0.5,tX=0.25,tY=-0.5,zm=1,tZ=1;
@@ -674,9 +760,7 @@ function build(){
     tX=vm[v][0]; tY=vm[v][1]; tZ=1;
     document.querySelectorAll('.b').forEach(function(b){b.classList.remove('on');});
     if(btn) btn.classList.add('on');
-    // show only this view's dim group (if dims are on)
-    Object.keys(dimGroups).forEach(function(k){ dimGroups[k].visible=false; });
-    if(dimOn) dimGroups[v].visible=true;
+    _dimUpdate();
   };
   window.tg=function(k){
     st[k]=!st[k];
@@ -684,6 +768,7 @@ function build(){
     var id={f:'bF',b:'bB',c:'bC'};
     document.getElementById(id[k]).textContent=lb[k]+' '+(st[k]?'Open':'Closed');
     document.getElementById(id[k]).classList.toggle('on',st[k]);
+    if(k==='f'||k==='b') _dimUpdate(); 
   };
 
   window.tgShadow=function(btn){
@@ -696,10 +781,17 @@ function build(){
     dimOn=!dimOn;
     btn.textContent='📐 Dims: '+(dimOn?'On':'Off');
     btn.classList.toggle('on',dimOn);
-    // show/hide only the current view's group
-    Object.keys(dimGroups).forEach(function(k){ dimGroups[k].visible=false; });
-    if(dimOn) dimGroups[dimCurView].visible=true;
+    _dimUpdate();
   };
+
+  function _dimUpdate(){
+    Object.keys(dimGroups).forEach(function(k){ dimGroups[k].visible=false; });
+    if(!dimOn) return;
+    var key=dimCurView;
+    if(key==='back'  && st.b) key='backOpen';
+    if(key==='front' && st.f) key='frontOpen';
+    if(dimGroups[key]) dimGroups[key].visible=true;
+  }
 
   cv.addEventListener('mousedown',function(e){drag=true;ox=e.clientX;oy=e.clientY;cv.style.cursor='grabbing';});
   window.addEventListener('mouseup',function(){drag=false;cv.style.cursor='grab';});
