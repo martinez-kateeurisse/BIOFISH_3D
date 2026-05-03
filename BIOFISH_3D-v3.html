@@ -51,6 +51,7 @@
   <button class="b" id="bP" onclick="tg('p')">📦 Platform: Folded</button>
   <span class="sep"></span>
   <button class="b on" id="bSh" onclick="tgShadow(this)">🌑 Shadow: On</button>
+  <button class="b" id="bDemo" onclick="toggleDemo()">▶ Demo</button>
   <button class="b" id="bDm" onclick="tgDim(this)">📐 Dims: Off</button>
 </div>
 
@@ -869,6 +870,33 @@ _DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
 
   })(dimGroups.frontOpen);
 
+  // ── DEMO ANIMATION ──
+  var demoPlaying=false, demoT=0, demoPhase=-1;
+
+  function _demoSetDoors(f,b,c,p){
+    st.f=f; st.b=b; st.c=c; st.p=p;
+    document.getElementById('bF').textContent ='🚪 Front: '   +(f?'Open':'Closed');
+    document.getElementById('bB').textContent ='🚪 Back: '    +(b?'Open':'Closed');
+    document.getElementById('bC').textContent ='📟 Circuit: ' +(c?'Open':'Closed');
+    document.getElementById('bP').textContent ='📦 Platform: '+(p?'Open':'Folded');
+    ['bF','bB','bC','bP'].forEach(function(id){
+      var s=id==='bF'?f:id==='bB'?b:id==='bC'?c:p;
+      document.getElementById(id).classList.toggle('on',s);
+    });
+    _dimUpdate();
+  }
+
+  window.toggleDemo=function(){
+    demoPlaying=!demoPlaying; demoT=0; demoPhase=-1;
+    var btn=document.getElementById('bDemo');
+    btn.textContent=demoPlaying?'⏹ Stop':'▶ Demo';
+    btn.classList.toggle('on',demoPlaying);
+    if(!demoPlaying){
+      _demoSetDoors(false,false,false,false);
+      tX=0.25; tY=-0.5; tZ=1;
+    }
+  };
+
   // ── CAMERA CONTROLS ──
   var rX=0.25,rY=-0.5,tX=0.25,tY=-0.5,zm=1,tZ=1;
   var drag=false,ox=0,oy=0;
@@ -948,8 +976,37 @@ _DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
     e.preventDefault();
   },{passive:false});
 
-  (function loop(){
+(function loop(){
     requestAnimationFrame(loop);
+
+    if(demoPlaying){
+      demoT+=1/60;
+  var ph=
+          demoT<1.5  ? 0 :   // front view — open front door + platforms
+          demoT<3.0  ? 1 :   // swing to left side
+          demoT<4.5  ? 2 :   // swing to back — open back + circuit
+          demoT<6.0  ? 3 :   // swing to right side
+          demoT<7.5  ? 4 :   // close all, back to front
+          demoT<10.0 ? 5 :   // full 360 spin
+          demoT<11.5 ? 6 :   // return to iso
+                      7;    // done
+        if(ph!==demoPhase){
+          demoPhase=ph;
+          if(ph===0){ tX=0.04; tY=0;           tZ=1.0;  _demoSetDoors(true,false,false,true); }
+          if(ph===1){ tX=0.04; tY=-Math.PI/2;  tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===2){ tX=0.04; tY=-Math.PI;    tZ=1.0;  _demoSetDoors(false,true,true,false); }
+          if(ph===3){ tX=0.04; tY=Math.PI/2;   tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===4){ tX=0.04; tY=0;           tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===5){ tX=0.20; tZ=1.15; }
+          if(ph===6){ tX=0.04; tY=0;            tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===7){ demoPlaying=false; demoPhase=-1;
+            document.getElementById('bDemo').textContent='▶ Demo';
+            document.getElementById('bDemo').classList.remove('on'); }
+        }
+      var spinStart=7.5;
+              if(ph===5) tY=0-(((demoT-spinStart)/2.5)*Math.PI*2);
+          }
+
     rX+=(tX-rX)*0.1; rY+=(tY-rY)*0.1; zm+=(tZ-zm)*0.1;
     fDG.rotation.x +=((st.f?Math.PI/2:0)-fDG.rotation.x)*0.12;
     bDLG.rotation.y+=((st.b?Math.PI/2:0)-bDLG.rotation.y)*0.12;
