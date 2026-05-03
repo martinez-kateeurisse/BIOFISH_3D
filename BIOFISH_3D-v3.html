@@ -48,6 +48,7 @@
   <button class="b" id="bF" onclick="tg('f')">🚪 Front: Closed</button>
   <button class="b" id="bB" onclick="tg('b')">🚪 Back: Closed</button>
   <button class="b" id="bC" onclick="tg('c')">📟 Circuit: Closed</button>
+  <button class="b" id="bP" onclick="tg('p')">📦 Platform: Folded</button>
   <span class="sep"></span>
   <button class="b on" id="bSh" onclick="tgShadow(this)">🌑 Shadow: On</button>
   <button class="b" id="bDm" onclick="tgDim(this)">📐 Dims: Off</button>
@@ -392,12 +393,78 @@ function build(){
   bx(1.5, 0.8, 0.8, mSwRed, swX, swY+0.5, swZ-0.7);
 
   // Side ports
-  cy(0.5,0.5,T+2,14,mDark,-W/2+FT/2,BY+H*0.22, D/5,null,Math.PI/2);
-  cy(1.0,1.0,T+1,16,mBody,-W/2+FT/2,BY+H*0.22, D/5,null,Math.PI/2);
-  cy(0.5,0.5,T+2,14,mDark, W/2-FT/2,BY+H*0.22, D/5,null,Math.PI/2);
-  cy(1.0,1.0,T+1,16,mBody, W/2-FT/2,BY+H*0.22, D/5,null,Math.PI/2);
+  cy(0.5,0.5,T+2,14,mDark,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(0.5,0.5,T+2,14,mDark, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+
+  // ── FOLDING SIDE PLATFORMS ──
+  // 5" × 5" × 1"  ≈  12.7 × 12.7 × 2.54 cm
+  var PW=12.7, PD=12.7, PT=2.54;
+  var SH=5.08, SW=2.54, BT=0.4, BH=2.54;
+  var groundY = BY - 2*WR - 2;
+  var pHingeY = groundY + PT + SH;
+  var pHingeZ = D/5;
+
+  // Left platform  (hinge at left wall, platform extends in -X when open)
+  var platLG = new R.Group();
+  platLG.position.set(-W/2, pHingeY, pHingeZ);
+  root.add(platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platLG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(-PW/2,0,0);
+    me.castShadow=true; platLG.add(me);
+  })();
+  platLG.rotation.z = -Math.PI/2;   // start folded
+  var standCY = -PT - SH/2;
+  bx(BT,BH,PD,  mFrame,-PW+BT/2,  BH/2, 0,        platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2, PD/2-BT/2, platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2,-PD/2+BT/2, platLG);
+  bx(SW,SH,SW,  mFrame,-PW+SW/2, standCY, 0,       platLG);
+  bx(SW+0.4,2.54,SW+0.4, mDark,-PW+SW/2,-PT-SH+1.27, 0, platLG);
+
+  // Right platform (hinge at right wall, platform extends in +X when open)
+  var platRG = new R.Group();
+  platRG.position.set(W/2, pHingeY, pHingeZ);
+  root.add(platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platRG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(PW/2,0,0);
+    me.castShadow=true; platRG.add(me);
+  })();
+  platRG.rotation.z =  Math.PI/2;   // start folded
+bx(BT,BH,PD,  mFrame, PW-BT/2,  BH/2, 0,        platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2, PD/2-BT/2, platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2,-PD/2+BT/2, platRG);
+  bx(SW,SH,SW,  mFrame, PW-SW/2, standCY, 0,       platRG);
+  bx(SW+0.4,2.54,SW+0.4, mDark, PW-SW/2,-PT-SH+1.27, 0, platRG);
 
   // ── FUNNEL ──
+  
   var fX=B3X, fZ=-D/8+5;
 
   function fcy(rt,rb,h,x,y,z){
@@ -623,7 +690,34 @@ function build(){
     _DT(g,lX,TY-PH,pZ+2,0,1,0); _DT(g,lX,TY,pZ+2,0,1,0);
     _DS(g,'PH = 12.5 cm',lX,TY-PH/2,pZ+14,14);
 
-    _addFH(g);
+_addFH(g);
+// ── Platform dims (left side view) ──
+    var _plZa = pHingeZ - PD/2;
+    var _plZb = pHingeZ + PD/2;
+    var _plYbot = pHingeY - PT;
+    var _plYtop = pHingeY;
+    var _plYrim = pHingeY + BH;
+    // Depth (Z span): witness from rim top, dim line above
+    var _dY = _plYrim + 10;
+    _DL(g,[[lX,_plYrim,_plZa],[lX,_dY,_plZa]],1);
+    _DL(g,[[lX,_plYrim,_plZb],[lX,_dY,_plZb]],1);
+    _DL(g,[[lX,_dY,_plZa],[lX,_dY,_plZb]]);
+    _DT(g,lX,_dY,_plZa,0,0,1); _DT(g,lX,_dY,_plZb,0,0,1);
+    _DS(g,'Plat = 12.7 cm',lX,_dY+8,pHingeZ,12);
+    // Slab thickness: witness from slab bottom & top, dim line off front edge
+    var _fZ = _plZa - 8;
+    _DL(g,[[lX,_plYbot,_plZa],[lX,_plYbot,_fZ]],1);
+    _DL(g,[[lX,_plYtop,_plZa],[lX,_plYtop,_fZ]],1);
+    _DL(g,[[lX,_plYbot,_fZ],[lX,_plYtop,_fZ]]);
+    _DT(g,lX,_plYbot,_fZ,0,1,0); _DT(g,lX,_plYtop,_fZ,0,1,0);
+    _DS(g,'Slab = 2.54 cm',lX,(_plYbot+_plYtop)/2,_fZ-11,11);
+    // Rim height: witness from slab top & rim top, dim line further off front
+    var _fZ2 = _plZa - 22;
+    _DL(g,[[lX,_plYtop,_plZa],[lX,_plYtop,_fZ2]],1);
+    _DL(g,[[lX,_plYrim,_plZa],[lX,_plYrim,_fZ2]],1);
+    _DL(g,[[lX,_plYtop,_fZ2],[lX,_plYrim,_fZ2]]);
+    _DT(g,lX,_plYtop,_fZ2,0,1,0); _DT(g,lX,_plYrim,_fZ2,0,1,0);
+    _DS(g,'Rim = 2.54 cm',lX,(_plYtop+_plYrim)/2,_fZ2-11,11);
   })(dimGroups.left);
 
   // ── RIGHT ──
@@ -645,7 +739,34 @@ function build(){
     _DL(g,[[rX2,TY-PH,D/2],[rX2,TY-PH,pZ+4]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,pZ+4]],1);
     _DL(g,[[rX2,TY-PH,pZ+2],[rX2,TY,pZ+2]]);
     _DT(g,rX2,TY-PH,pZ+2,0,1,0); _DT(g,rX2,TY,pZ+2,0,1,0);
-    _DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
+_DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
+ // ── Platform dims (right side view) ──
+    var _plZa2 = pHingeZ - PD/2;
+    var _plZb2 = pHingeZ + PD/2;
+    var _plYbot2 = pHingeY - PT;
+    var _plYtop2 = pHingeY;
+    var _plYrim2 = pHingeY + BH;
+    // Depth (Z span): witness from rim top, dim line above
+    var _dY2 = _plYrim2 + 10;
+    _DL(g,[[rX2,_plYrim2,_plZa2],[rX2,_dY2,_plZa2]],1);
+    _DL(g,[[rX2,_plYrim2,_plZb2],[rX2,_dY2,_plZb2]],1);
+    _DL(g,[[rX2,_dY2,_plZa2],[rX2,_dY2,_plZb2]]);
+    _DT(g,rX2,_dY2,_plZa2,0,0,1); _DT(g,rX2,_dY2,_plZb2,0,0,1);
+    _DS(g,'Plat = 12.7 cm',rX2,_dY2+8,pHingeZ,12);
+    // Slab thickness: witness from slab bottom & top, dim line off front edge
+    var _fZ3 = _plZa2 - 8;
+    _DL(g,[[rX2,_plYbot2,_plZa2],[rX2,_plYbot2,_fZ3]],1);
+    _DL(g,[[rX2,_plYtop2,_plZa2],[rX2,_plYtop2,_fZ3]],1);
+    _DL(g,[[rX2,_plYbot2,_fZ3],[rX2,_plYtop2,_fZ3]]);
+    _DT(g,rX2,_plYbot2,_fZ3,0,1,0); _DT(g,rX2,_plYtop2,_fZ3,0,1,0);
+    _DS(g,'Slab = 2.54 cm',rX2,(_plYbot2+_plYtop2)/2,_fZ3-11,11);
+    // Rim height: witness from slab top & rim top, dim line further off front
+    var _fZ4 = _plZa2 - 22;
+    _DL(g,[[rX2,_plYtop2,_plZa2],[rX2,_plYtop2,_fZ4]],1);
+    _DL(g,[[rX2,_plYrim2,_plZa2],[rX2,_plYrim2,_fZ4]],1);
+    _DL(g,[[rX2,_plYtop2,_fZ4],[rX2,_plYrim2,_fZ4]]);
+    _DT(g,rX2,_plYtop2,_fZ4,0,1,0); _DT(g,rX2,_plYrim2,_fZ4,0,1,0);
+    _DS(g,'Rim = 2.54 cm',rX2,(_plYtop2+_plYrim2)/2,_fZ4-11,11);
   })(dimGroups.right);
 
   // ── TOP ──
@@ -751,7 +872,7 @@ function build(){
   // ── CAMERA CONTROLS ──
   var rX=0.25,rY=-0.5,tX=0.25,tY=-0.5,zm=1,tZ=1;
   var drag=false,ox=0,oy=0;
-  var st={f:false,b:false,c:false};
+  var st={f:false,b:false,c:false,p:false};
   var vm={iso:[0.25,-0.5],front:[0.04,0],back:[0.04,Math.PI],
     left:[0.04,-Math.PI/2],right:[0.04,Math.PI/2],top:[1.45,0]};
 
@@ -764,8 +885,8 @@ function build(){
   };
   window.tg=function(k){
     st[k]=!st[k];
-    var lb={f:'🚪 Front:',b:'🚪 Back:',c:'📟 Circuit:'};
-    var id={f:'bF',b:'bB',c:'bC'};
+    var lb={f:'🚪 Front:',b:'🚪 Back:',c:'📟 Circuit:',p:'📦 Platform:'};
+    var id={f:'bF',b:'bB',c:'bC',p:'bP'};
     document.getElementById(id[k]).textContent=lb[k]+' '+(st[k]?'Open':'Closed');
     document.getElementById(id[k]).classList.toggle('on',st[k]);
     if(k==='f'||k==='b') _dimUpdate(); 
@@ -834,6 +955,8 @@ function build(){
     bDLG.rotation.y+=((st.b?Math.PI/2:0)-bDLG.rotation.y)*0.12;
     bDRG.rotation.y+=((-st.b*Math.PI/2)-bDRG.rotation.y)*0.12;
     cbG.rotation.x +=((-st.c*Math.PI/2)-cbG.rotation.x)*0.12;
+    platLG.rotation.z+=((st.p?0:-Math.PI/2)-platLG.rotation.z)*0.12;
+    platRG.rotation.z+=((st.p?0: Math.PI/2)-platRG.rotation.z)*0.12;
 
     var ang=fDG.rotation.x;
     if(ang>0.06){
