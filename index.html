@@ -1,0 +1,1269 @@
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIO-FISH 3D Model</title>
+<style>
+  * { margin:0; box-sizing:border-box; font-family:sans-serif; }
+  body { background:#fff; }
+  #tb {
+    display:flex; flex-wrap:wrap; gap:5px; padding:8px 10px;
+    background:#e4e4e0; border-bottom:1px solid #ccc; align-items:center;
+  }
+  .b {
+    background:#fff; border:1px solid #bbb; border-radius:5px;
+    padding:4px 10px; font-size:12px; cursor:pointer; color:#333;
+  }
+  .b:hover { background:#eee; }
+  .b.on { background:#cce4ff; border-color:#66aadd; }
+  .sep { width:1px; height:16px; background:#ccc; margin:0 3px; }
+  #cw { position:relative; height:calc(100vh - 46px); }
+  canvas { width:100%; height:100%; display:block; cursor:grab; }
+  #ht {
+    position:absolute; bottom:10px; left:50%; transform:translateX(-50%);
+    background:rgba(0,0,0,0.15); color:#333; font-size:11px;
+    padding:4px 14px; border-radius:12px; pointer-events:none;
+  }
+  #ld {
+    position:absolute; inset:0; display:flex; flex-direction:column;
+    align-items:center; justify-content:center; background:#fff;
+    font-size:15px; color:#555; gap:12px;
+  }
+  #lbar { width:220px; height:5px; background:#ddd; border-radius:3px; }
+  #lp   { width:0%; height:100%; background:#5599dd; border-radius:3px; transition:width .25s; }
+</style>
+</head>
+<body>
+
+<div id="tb">
+  <span style="font-size:12px;color:#888;margin-right:2px">View:</span>
+  <button class="b on" onclick="sv('iso',this)">Iso</button>
+  <button class="b" onclick="sv('front',this)">Front</button>
+  <button class="b" onclick="sv('back',this)">Back</button>
+  <button class="b" onclick="sv('left',this)">Left</button>
+  <button class="b" onclick="sv('right',this)">Right</button>
+  <button class="b" onclick="sv('top',this)">Top</button>
+  <span class="sep"></span>
+  <button class="b" id="bF" onclick="tg('f')">🚪 Front: Closed</button>
+  <button class="b" id="bB" onclick="tg('b')">🚪 Back: Closed</button>
+  <button class="b" id="bC" onclick="tg('c')">📟 Circuit: Closed</button>
+  <button class="b" id="bP" onclick="tg('p')">📦 Platform: Folded</button>
+  <span class="sep"></span>
+  <button class="b on" id="bSh" onclick="tgShadow(this)">🌑 Shadow: On</button>
+  <button class="b" id="bDemo" onclick="toggleDemo()">▶ Demo</button>
+  <button class="b" id="bDm" onclick="tgDim(this)">📐 Dims: Off</button>
+  <button class="b" id="bPL" onclick="tgParts(this)">🏷️ Parts Labels: Off</button>
+</div>
+
+<div id="cw">
+  <canvas id="c"></canvas>
+  <div id="ht">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+  <div id="ld">
+    <div>Loading 3D engine…</div>
+    <div id="lbar"><div id="lp"></div></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+var lp = document.getElementById('lp');
+var pct = 0;
+var pi = setInterval(function(){
+  pct = Math.min(pct+10, 90);
+  lp.style.width = pct+'%';
+},100);
+window.addEventListener('load', function(){
+  clearInterval(pi); lp.style.width='100%';
+  setTimeout(function(){ document.getElementById('ld').style.display='none'; build(); },150);
+});
+
+function build(){
+  var R = THREE;
+  var cv = document.getElementById('c');
+  var ren = new R.WebGLRenderer({canvas:cv, antialias:true});
+  ren.setPixelRatio(Math.min(devicePixelRatio,2));
+  ren.setClearColor(0xffffff); 
+  ren.shadowMap.enabled = true;
+  ren.shadowMap.type = R.PCFSoftShadowMap;
+
+  var scene = new R.Scene();
+  scene.background = new R.Color(0xffffff); 
+  scene.fog = new R.Fog(0xffffff, 400, 700); 
+
+  var cam = new R.PerspectiveCamera(38, 1, 0.1, 1000);
+  function resize(){
+    var w=cv.clientWidth, h=cv.clientHeight;
+    ren.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  // ── LIGHTING ──
+  scene.add(new R.AmbientLight(0xffffff, 0.70));
+  var sun = new R.DirectionalLight(0xffffff, 0.6);
+  sun.position.set(160,240,190);
+  sun.castShadow = true;
+  sun.shadow.mapSize.set(1024,1024);
+  sun.shadow.camera.left   = -100; sun.shadow.camera.right = 100;
+  sun.shadow.camera.top    =  100; sun.shadow.camera.bottom=-100;
+  sun.shadow.camera.near   = 0.5;  sun.shadow.camera.far   = 600;
+  scene.add(sun);
+  var f1=new R.DirectionalLight(0xeef2ff,0.30); f1.position.set(-120,80,-100); scene.add(f1);
+  var f2=new R.DirectionalLight(0xffffff,0.20); f2.position.set(0,50,200);     scene.add(f2);
+  var f3=new R.DirectionalLight(0xffffff,0.20); f3.position.set(0,-80,100);    scene.add(f3);
+
+  var floor=new R.Mesh(new R.PlaneGeometry(400,400),
+    new R.MeshStandardMaterial({color:0xd8d8d4,roughness:0.9}));
+  floor.rotation.x=-Math.PI/2; floor.position.y=-36;
+  floor.receiveShadow=true; scene.add(floor);
+
+  // ══════════════════════════════════════════════════════════════
+  //  UNIFIED MATERIAL PALETTE  (consistent shading throughout)
+  // ══════════════════════════════════════════════════════════════
+  function mat(c,me,ro){
+    return new R.MeshStandardMaterial({color:c, metalness:me, roughness:ro});
+  }
+
+  // Primary surfaces
+  var mBody  = mat(0xbec0c3, 0.38, 0.52);  
+  var mFrame = mat(0xa4a7ab, 0.50, 0.50);  
+  var mDark  = mat(0x0e1012, 0.15, 0.85);  
+
+  // Screen & indicators
+  var mLCD   = new R.MeshStandardMaterial({color:0x1a55dd, emissive:0x06102a, roughness:0.40});
+
+  // Switch
+  var mSwWht = new R.MeshStandardMaterial({color:0xf0f0ee, roughness:0.78});
+  var mSwRed = new R.MeshStandardMaterial({color:0xcc2200, roughness:0.80, emissive:0x220000});
+
+  // Caster wheels
+  var mWheel = new R.MeshStandardMaterial({color:0xcc1400, roughness:0.80, metalness:0.10});
+  var mHub   = mat(0x828487, 0.30, 0.75);  
+
+  // Mechanical / thermal components
+  var mStove  = mat(0x8c8f92, 0.22, 0.80); 
+  var mBurner = mat(0x1e2022, 0.28, 0.80); 
+  var mPCB    = new R.MeshStandardMaterial({color:0x1b5e20, roughness:0.8, metalness:0.1});
+
+  // Funnel
+  var mFunnel = new R.MeshStandardMaterial({
+    color:0xc8cacc, metalness:0.60, roughness:0.40, side:R.DoubleSide
+  });
+
+  var root=new R.Group(); scene.add(root);
+
+  function bx(w,h,d,m,x,y,z,g){
+    var me=new R.Mesh(new R.BoxGeometry(w,h,d),m);
+    me.position.set(x,y,z); me.castShadow=true; me.receiveShadow=true;
+    (g||root).add(me); return me;
+  }
+  function cy(rt,rb,h,sg,m,x,y,z,rx,rz,g){
+    var me=new R.Mesh(new R.CylinderGeometry(rt,rb,h,sg||32),m);
+    me.position.set(x,y,z);
+    if(rx!=null) me.rotation.x=rx;
+    if(rz!=null) me.rotation.z=rz;
+    me.castShadow=true; (g||root).add(me); return me;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  DIMENSIONS
+  // ═══════════════════════════════════════════════════════════
+  var W=86, H=51, D=40.5, T=0.5, PH=12.5, FT=2.5, WR=2.5;
+  var BY=-H/2, TY=H/2;
+  var DH=H-PH-FT*2;
+  var divY=TY-PH-FT;
+
+  var B1W=28.5, B2W=29, B3W=28.5;
+  var B1X=-W/2+B1W/2+1.5;
+  var B2X=-W/2+B1W+B2W/2;
+  var B3X= W/2-B3W/2-1.5;
+  var D1X=-W/2+B1W;
+  var D2X= W/2-B3W;
+
+  var CH=20, CR=10, CCR=10.5;
+  var stoveFloor = BY+T;
+  var stoveTopY  = stoveFloor+1+4;
+  var tb13 = stoveTopY+CH/2+1;
+  var tb2  = stoveFloor+CH/2+1;
+
+  var cr=[
+    [-W/2+FT/2,-D/2+FT/2],[W/2-FT/2,-D/2+FT/2],
+    [-W/2+FT/2, D/2-FT/2],[W/2-FT/2, D/2-FT/2]
+  ];
+  var FZ= D/2-FT-T/2;
+  var BZ=-D/2+FT+T/2;
+  var PY2=TY-(PH+FT)/2;
+
+  // ── FRAME ──
+  cr.forEach(function(c){ bx(FT,H,FT,mFrame,c[0],0,c[1]); });
+  [TY-FT/2, TY-PH-FT/2, BY+FT/2].forEach(function(y){
+    bx(W,FT,FT,mFrame,0,y,-D/2+FT/2); bx(W,FT,FT,mFrame,0,y,D/2-FT/2);
+    bx(FT,FT,D,mFrame,-W/2+FT/2,y,0); bx(FT,FT,D,mFrame,W/2-FT/2,y,0);
+  });
+
+  // ── SHELL ──
+  bx(W-FT*2,T,D-FT*2,mBody,0,TY-T/2,0);   
+  bx(W-FT*2,T,D-FT*2,mBody,0,BY+T/2,0);   
+
+  // ── SIDE WALLS ──
+  var vBase=BY+H*0.18, sLen=7.5, sR=0.5, sGap=3.0;
+  var wY0=BY+FT, wY1=TY-FT, wZ0=-D/2+FT, wZ1=D/2-FT;
+  function makeWall(mx,vZ){
+    var sh=new R.Shape();
+    sh.moveTo(wZ0,wY0); sh.lineTo(wZ1,wY0);
+    sh.lineTo(wZ1,wY1); sh.lineTo(wZ0,wY1); sh.closePath();
+    for(var i=0;i<3;i++){
+      var cy2=vBase+i*sGap, zc=vZ, h2=new R.Path();
+      h2.moveTo(zc-sLen/2,cy2-sR); h2.lineTo(zc+sLen/2,cy2-sR);
+      h2.absarc(zc+sLen/2,cy2,sR,-Math.PI/2,Math.PI/2,false);
+      h2.lineTo(zc-sLen/2,cy2+sR);
+      h2.absarc(zc-sLen/2,cy2,sR,Math.PI/2,-Math.PI/2,false);
+      h2.closePath(); sh.holes.push(h2);
+    }
+    var geo=new R.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});
+    var mesh=new R.Mesh(geo,mBody);
+    mesh.rotation.y=Math.PI/2;
+    var xp=mx*(W/2-FT); mesh.position.set(xp-mx*T,0,0);
+    if(mx<0) mesh.scale.x=-1;
+    mesh.castShadow=true; mesh.receiveShadow=true; root.add(mesh);
+  }
+  makeWall( 1,  D/5);
+  makeWall(-1, -D/5);
+
+  // Interior front wall
+  bx(W-FT*2,DH,T,mBody,0,BY+FT+DH/2,FZ-T);
+
+  // ── FRONT PANEL STRIP ──
+  bx(W-FT*2,PH-FT,T,mBody,0,PY2,FZ);
+  bx(W-FT*2-2,PH-FT-2,0.3,mBody,0,PY2,FZ+0.3);
+
+  // LCD
+  var lx=-W/2+FT+8;
+  bx(10,4,0.5,mDark,lx,PY2,FZ+0.3);
+  bx(8.5,3,0.5,mLCD,lx,PY2,FZ+0.6);
+
+  // Buttons
+  for(var i=2;i<4;i++){
+    var bxi=-24.5+i*4;
+    cy(1.0,1.1,1.2,20,mDark,  bxi,PY2,FZ+0.5, Math.PI/2,null);
+    cy(0.85,0.95,1.6,20,mFrame,bxi,PY2,FZ+1.4, Math.PI/2,null);
+  }
+
+  // ── BIOFISH LABEL PLATE ──
+  var _lc=document.createElement('canvas');
+  _lc.width=256; _lc.height=80;
+  var _cx=_lc.getContext('2d');
+  _cx.fillStyle='#c2c4c8';
+  _cx.fillRect(0,0,256,80);
+  _cx.font='bold 46px Arial';
+  _cx.fillStyle='#1a55dd';
+  _cx.textAlign='center';
+  _cx.textBaseline='middle';
+  _cx.fillText('BIOFISH',128,40);
+  var _lt=new R.CanvasTexture(_lc);
+  var mLabelFace=new R.MeshStandardMaterial({map:_lt,roughness:0.50,metalness:0.10});
+  var mPlate=mat(0xc6c8cc,0.22,0.62);
+  var _pg=new R.BoxGeometry(8.5,3.2,0.5);
+  var _pm=new R.Mesh(_pg,[mPlate,mPlate,mPlate,mPlate,mLabelFace,mPlate]);
+  _pm.position.set(-22.5,PY2,FZ+0.45);
+  _pm.castShadow=true; root.add(_pm);
+
+  // ── FRONT DOOR ──
+  var fHY=BY+FT;
+  var fDG=new R.Group(); fDG.position.set(0,fHY,FZ); root.add(fDG);
+  bx(W-FT*2,DH,T,mBody,0,DH/2,0,fDG);
+
+  // Hose dispensing hole
+  var intWZ=D/2-FT-T*4;
+  cy(0.5,0.5,2.5,12,mDark, B2X,BY+FT+DH*0.09,intWZ-1,   Math.PI/2,null);
+  cy(1.0,1.0,1.2,16,mBody, B2X,BY+FT+DH*0.09,intWZ-1.8, Math.PI/2,null);
+
+  // ── SUPPORT CHAINS ──
+  var mChain=new R.MeshStandardMaterial({color:0xb8b8b8,metalness:0.80,roughness:0.20});
+  var nLk=20, lkR=0.5, lkTR=0.13, lkSp=lkR*1.95;
+  var natLen=nLk*lkSp;
+
+  function mkChain(){
+    var g=new R.Group();
+    for(var i=0;i<nLk;i++){
+      var t=new R.Mesh(new R.TorusGeometry(lkR,lkTR,6,8),mChain);
+      t.position.y=(i-nLk/2+0.5)*lkSp;
+      if(i%2===1) t.rotation.y=Math.PI/2;
+      g.add(t);
+    }
+    g.visible=false; root.add(g); return g;
+  }
+  var chainL=mkChain(), chainR=mkChain();
+
+  var cAncX =W/2-FT;
+  var cDoorY=DH*1;
+  var cFrmY =fHY+cDoorY;
+
+  bx(2.2,2.2,1.4,mFrame,-cAncX,cFrmY,FZ+0.7);
+  bx(2.2,2.2,1.4,mFrame, cAncX,cFrmY,FZ+0.7);
+  bx(2.2,2.2,1.4,mFrame,-cAncX,cDoorY,0.7, fDG);
+  bx(2.2,2.2,1.4,mFrame, cAncX,cDoorY,0.7, fDG);
+
+  var _dir=new R.Vector3(), _yUp=new R.Vector3(0,1,0), _qq=new R.Quaternion();
+  function updateChain(ch,ax,ay,az,bx2,by2,bz2){
+    var dx=bx2-ax,dy=by2-ay,dz=bz2-az;
+    var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(len<2.0){ ch.visible=false; return; }
+    ch.visible=true;
+    ch.position.set((ax+bx2)/2,(ay+by2)/2,(az+bz2)/2);
+    _dir.set(dx,dy,dz).normalize();
+    _qq.setFromUnitVectors(_yUp,_dir);
+    ch.quaternion.copy(_qq);
+    ch.scale.y=len/natLen;
+  }
+
+  // ── BACK UPPER SECTION ──
+  var HW=W/2-FT;
+  bx(HW,PH-FT,T,mBody,HW/2,PY2,BZ);
+  bx(0.8,PH-FT,0.8,mFrame,0,PY2,BZ-0.4);
+
+  var cbHY=TY-PH;
+  var cbG=new R.Group(); cbG.position.set(-HW/2,cbHY,BZ); root.add(cbG);
+  bx(HW,PH-FT,T,mBody,0,(PH-FT)/2,0,cbG);
+  cy(0.65,0.65,0.8,12,mFrame,0,(PH-FT)*0.55,-0.4,Math.PI/2,null,cbG);
+
+  // Circuit board
+  var pcbCX=-HW/2;
+  var pcbY=divY+T+1.5;
+  bx(21,T*2,D-FT*4-2,mPCB,pcbCX,pcbY,0);
+  [[-5,3],[0,-4],[5,3]].forEach(function(c){
+    bx(3.0,1.5,2.0,mDark,pcbCX+c[0],pcbY+T+0.75,c[1]);
+  });
+
+  // ── BACK DOUBLE DOORS ──
+  var bDY=BY+FT, bdw=HW, fanR=3.5;
+  function mkBackDoor(side){
+    var g=new R.Group();
+    g.position.set(side*(W/2-FT),bDY,BZ);
+    root.add(g);
+    var dc=side*(-bdw/2);
+    bx(bdw,DH,T,mBody,dc,DH/2,0,g);
+    var innerX=dc+(-side)*(bdw/2-0.4);
+    bx(0.8,DH,0.6,mFrame,innerX,DH/2,-0.3,g);
+    var fx=-side*(fanR+3.5), fy=DH*0.28;
+    cy(fanR+0.5,fanR+0.5,T,   28,mBody,fx,fy,0.15, Math.PI/2,null,g);
+    cy(fanR,fanR,T*1.5,        28,mDark,fx,fy,0,    Math.PI/2,null,g);
+    cy(1.0,1.0,T+0.5,          12,mHub, fx,fy,0,    Math.PI/2,null,g);
+    var hx=dc+(-side)*(bdw/2-2);
+    bx(1.8,1.2,1.5,mFrame,hx,DH*0.5,-(T/2+0.75),g);
+    return g;
+  }
+  var bDLG=mkBackDoor(-1), bDRG=mkBackDoor(1);
+
+  // ── STOVE ──
+  [B1X,B3X].forEach(function(sx){
+    [[-8,-8],[-8,8],[8,-8],[8,8]].forEach(function(lp2){
+      bx(1.5,1,1.5,mFrame,sx+lp2[0],stoveFloor+0.5,lp2[1]);
+    });
+    bx(21,4,21,mStove,sx,stoveFloor+1+2,0);
+    [-5,5].forEach(function(boff){
+      var ring=new R.Mesh(new R.TorusGeometry(2.5,0.55,8,24),mBurner);
+      ring.rotation.x=Math.PI/2;
+      ring.position.set(sx+boff,stoveFloor+5.1,0);
+      root.add(ring);
+    });
+  });
+
+  // ── CONTAINERS ×3 ──
+  [[B1X,tb13],[B2X,tb2],[B3X,tb13]].forEach(function(p){
+    var tx=p[0], tb=p[1];
+    cy(CR,CR,CH,32,mBody,tx,tb,0);
+    cy(CR+0.8,CR+0.8,1.0,32,mBody,tx,tb-CH/2-0.5,0);
+    cy(CCR,CCR,1.5,32,mBody,tx,tb+CH/2+0.75,0);
+    cy(1.1,1.1,2.0,16,mFrame,tx,tb+CH/2+2.0,0);
+    bx(4,0.7,0.9,mFrame,tx,tb+CH/2+3.5,0);
+  });
+
+  // Bay divider panels
+  bx(T*2,DH-2,D-FT*4,mBody,D1X,bDY+(DH-2)/2,0);
+  bx(T*2,DH-2,D-FT*4,mBody,D2X,bDY+(DH-2)/2,0);
+
+  // Upper / lower divider sheet
+  bx(W-FT*2,T*2,D-FT*2,mBody,0,divY,0);
+
+  // ── ROCKER SWITCH ──
+  var swX = -(W/2-FT) - 1.5/2;
+  var swY = TY-PH/2;
+  var swZ = -D/2+FT+8;
+  bx(1.5, 2.3, 3.0, mSwWht, swX, swY, swZ);
+  bx(1.2, 1.4, 2.2, mSwWht, swX, swY, swZ);
+  bx(1.5, 0.8, 0.8, mSwRed, swX, swY+0.5, swZ-0.7);
+
+  // Side ports
+  cy(0.5,0.5,T+2,14,mDark,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(0.5,0.5,T+2,14,mDark, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+
+  // ── FOLDING SIDE PLATFORMS ──
+  // 5" × 5" × 1"  ≈  12.7 × 12.7 × 2.54 cm
+  var PW=12.7, PD=12.7, PT=2.54;
+  var SH=5.08, SW=2.54, BT=0.4, BH=2.54;
+  var groundY = BY - 2*WR - 2;
+  var pHingeY = groundY + PT + SH;
+  var pHingeZ = D/5;
+
+  // Left platform  (hinge at left wall, platform extends in -X when open)
+  var platLG = new R.Group();
+  platLG.position.set(-W/2, pHingeY, pHingeZ);
+  root.add(platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platLG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(-PW/2,0,0);
+    me.castShadow=true; platLG.add(me);
+  })();
+  platLG.rotation.z = -Math.PI/2;   // start folded
+  var standCY = -PT - SH/2;
+  bx(BT,BH,PD,  mFrame,-PW+BT/2,  BH/2, 0,        platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2, PD/2-BT/2, platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2,-PD/2+BT/2, platLG);
+  bx(SW,SH,SW,  mFrame,-PW+SW/2, standCY, 0,       platLG);
+  bx(SW+0.4,2.54,SW+0.4, mDark,-PW+SW/2,-PT-SH+1.27, 0, platLG);
+
+  // Right platform (hinge at right wall, platform extends in +X when open)
+  var platRG = new R.Group();
+  platRG.position.set(W/2, pHingeY, pHingeZ);
+  root.add(platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platRG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(PW/2,0,0);
+    me.castShadow=true; platRG.add(me);
+  })();
+  platRG.rotation.z =  Math.PI/2;   // start folded
+bx(BT,BH,PD,  mFrame, PW-BT/2,  BH/2, 0,        platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2, PD/2-BT/2, platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2,-PD/2+BT/2, platRG);
+  bx(SW,SH,SW,  mFrame, PW-SW/2, standCY, 0,       platRG);
+  bx(SW+0.4,2.54,SW+0.4, mDark, PW-SW/2,-PT-SH+1.27, 0, platRG);
+
+  // ── FUNNEL ──
+  
+  var fX=B3X, fZ=-D/8+5;
+
+  function fcy(rt,rb,h,x,y,z){
+    var geo=new R.CylinderGeometry(rt,rb,h,36,1,true);
+    var me=new R.Mesh(geo,mFunnel);
+    me.position.set(x,y,z); me.castShadow=true; root.add(me);
+  }
+
+  var fTubeBot = 5.0;
+  var fTubeTop = TY - 1.0;
+  var fTubeH   = fTubeTop - fTubeBot;
+  var fTubeCY  = (fTubeBot + fTubeTop) / 2;
+  fcy(3.25, 3.25, fTubeH, fX, fTubeCY, fZ);
+  fcy(6.5, 3.25, 7.0, fX, TY+3.0, fZ);
+  fcy(6.5, 6.5, 6.5, fX, TY+9.75, fZ);
+
+  // ── MACHINE HANDLES ──
+  var hY=12, hR=0.65, hLen=13, hOff=2;
+  [[-W/2,-1],[W/2,1]].forEach(function(ws){
+    var wx=ws[0], s=ws[1];
+    var barX=wx+s*hOff;
+    cy(hR,hR,hLen,12,mFrame,barX,hY,0,Math.PI/2,null);
+    cy(hR,hR,hOff,8,mFrame,wx+s*hOff/2,hY,-(hLen/2-1.5),null,Math.PI/2);
+    cy(hR,hR,hOff,8,mFrame,wx+s*hOff/2,hY, (hLen/2-1.5),null,Math.PI/2);
+  });
+
+  // ── CASTER WHEELS ──
+  cr.forEach(function(c){
+    bx(3.5,2.0,3.5,mBody,c[0],BY-1.0,c[1]);
+    cy(0.6,0.6,1.5,10,mHub,  c[0],BY-2.2,c[1]);
+    cy(WR,WR,2,28,mWheel,    c[0],BY-WR-2,c[1],null,Math.PI/2);
+    cy(1.2,1.2,2.2,14,mHub,  c[0],BY-WR-2,c[1],null,Math.PI/2);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  DIMENSIONS
+  // ══════════════════════════════════════════════════════════════
+  var dimGroups={}, dimCurView='iso', dimOn=false;
+
+  var _DLM  = new R.LineBasicMaterial({color:0x1144cc,depthTest:false,transparent:true,opacity:0.90});
+  var _DLME = new R.LineBasicMaterial({color:0x8899bb,depthTest:false,transparent:true,opacity:0.55});
+
+  function _DL(g,pts,ext){
+    var l=new R.Line(new R.BufferGeometry().setFromPoints(
+      pts.map(function(p){return new R.Vector3(p[0],p[1],p[2]);})),ext?_DLME:_DLM);
+    l.renderOrder=5; g.add(l);
+  }
+  function _DT(g,x,y,z,dx,dy,dz,s){
+    s=s||2; _DL(g,[[x-dx*s,y-dy*s,z-dz*s],[x+dx*s,y+dy*s,z+dz*s]]);
+  }
+  
+  function _DS(g,text,x,y,z,w){
+    w=(w||15) * 1.8;
+    var cv2=document.createElement('canvas');
+    cv2.width=400; cv2.height=84;
+    var ct=cv2.getContext('2d');
+    ct.fillStyle='rgba(228,240,255,0.95)'; ct.fillRect(0,0,400,84);
+    ct.strokeStyle='#1144cc'; ct.lineWidth=3; ct.strokeRect(3,3,394,78);
+    ct.fillStyle='#0d2e99'; ct.font='bold 40px Arial';
+    ct.textAlign='center'; ct.textBaseline='middle'; ct.fillText(text,200,42);
+    var sp=new R.Sprite(new R.SpriteMaterial(
+      {map:new R.CanvasTexture(cv2),depthTest:false,transparent:true,sizeAttenuation:true}));
+    sp.position.set(x,y,z); sp.scale.set(w,w*(84/400),1);
+    sp.renderOrder=6; g.add(sp);
+  }
+
+  ['iso','front','back','left','right','top','backOpen','frontOpen'].forEach(function(v){
+    var gr=new R.Group(); gr.visible=false; root.add(gr); dimGroups[v]=gr;
+  });
+
+  var _o=7, _wYb=BY-WR*2-7;
+
+  var _fX=B3X, _fZd=-D/8+5;          
+  var _fTop=TY+13, _fMR=6.5, _fTR=3.25;  
+
+  function _addFH(g){
+    var fx2=_fX+_fMR+4;
+    _DL(g,[[_fX+_fMR,TY,_fZd],[fx2+2,TY,_fZd]],1);
+    _DL(g,[[_fX+_fMR,_fTop,_fZd],[fx2+2,_fTop,_fZd]],1);
+    _DL(g,[[fx2,TY,_fZd],[fx2,_fTop,_fZd]]);
+    _DT(g,fx2,TY,_fZd,0,1,0); _DT(g,fx2,_fTop,_fZd,0,1,0);
+    _DS(g,'FH = 13 cm',fx2+12,TY+6.5,_fZd,13);
+  }
+
+  // ── ISO ──
+  (function(g){
+    var wZ=D/2+_o;
+    _DL(g,[[-W/2,BY,D/2],[-W/2,_wYb,wZ]],1); _DL(g,[[W/2,BY,D/2],[W/2,_wYb,wZ]],1);
+    _DL(g,[[-W/2,_wYb,wZ],[W/2,_wYb,wZ]]);
+    _DT(g,-W/2,_wYb,wZ,1,0,0); _DT(g,W/2,_wYb,wZ,1,0,0);
+    _DS(g,'W = 86 cm',0,_wYb,wZ+2);
+
+    var hX=W/2+_o;
+    _DL(g,[[W/2,BY,D/2],[hX+4,BY,D/2]],1); _DL(g,[[W/2,TY,D/2],[hX+4,TY,D/2]],1);
+    _DL(g,[[hX+2,BY,D/2],[hX+2,TY,D/2]]);
+    _DT(g,hX+2,BY,D/2,0,1,0); _DT(g,hX+2,TY,D/2,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,D/2);
+
+    var dX=W/2+_o, dYY=BY-9;
+    _DL(g,[[W/2,BY,-D/2],[dX+4,dYY,-D/2]],1); _DL(g,[[W/2,BY,D/2],[dX+4,dYY,D/2]],1);
+    _DL(g,[[dX+2,dYY,-D/2],[dX+2,dYY,D/2]]);
+    _DT(g,dX+2,dYY,-D/2,0,0,1); _DT(g,dX+2,dYY,D/2,0,0,1);
+    _DS(g,'D = 40.5 cm',dX+14,dYY,0);
+
+    var pX=W/2+_o*2.6;
+    _DL(g,[[W/2,TY-PH,D/2],[pX+4,TY-PH,D/2]],1); _DL(g,[[W/2,TY,D/2],[pX+4,TY,D/2]],1);
+    _DL(g,[[pX+2,TY-PH,D/2],[pX+2,TY,D/2]]);
+    _DT(g,pX+2,TY-PH,D/2,0,1,0); _DT(g,pX+2,TY,D/2,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,D/2,14);
+
+    _addFH(g);
+  })(dimGroups.iso);
+
+  // ── FRONT ──
+  (function(g){
+    var fZ2=D/2;
+
+    var topY = TY + 18; 
+    _DL(g,[[-W/2,TY,fZ2],[-W/2,topY,fZ2]],1); 
+    _DL(g,[[W/2,TY,fZ2],[W/2,topY,fZ2]],1);
+    _DL(g,[[-W/2,topY,fZ2],[W/2,topY,fZ2]]);
+    _DT(g,-W/2,topY,fZ2,1,0,0); _DT(g,W/2,topY,fZ2,1,0,0);
+    _DS(g,'W = 86 cm',0,topY+5,fZ2, 14);
+
+    var hX=W/2+_o;
+    _DL(g,[[W/2,BY,fZ2],[hX+4,BY,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[hX+4,TY,fZ2]],1);
+    _DL(g,[[hX+2,BY,fZ2],[hX+2,TY,fZ2]]);
+    _DT(g,hX+2,BY,fZ2,0,1,0); _DT(g,hX+2,TY,fZ2,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,fZ2);
+
+    var pX=W/2+_o*2.6;
+    _DL(g,[[W/2,TY-PH,fZ2],[pX+4,TY-PH,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[pX+4,TY,fZ2]],1);
+    _DL(g,[[pX+2,TY-PH,fZ2],[pX+2,TY,fZ2]]);
+    _DT(g,pX+2,TY-PH,fZ2,0,1,0); _DT(g,pX+2,TY,fZ2,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,fZ2,14);
+
+    var fdXl = -W/2+FT, fdXr = W/2-FT, fdY = BY+FT+6; 
+    _DL(g, [[fdXl, BY+FT, fZ2], [fdXl, fdY, fZ2]], 1);
+    _DL(g, [[fdXr, BY+FT, fZ2], [fdXr, fdY, fZ2]], 1);
+    _DL(g, [[fdXl, fdY, fZ2], [fdXr, fdY, fZ2]]);
+    _DT(g, fdXl, fdY, fZ2, 1,0,0); _DT(g, fdXr, fdY, fZ2, 1,0,0);
+    _DS(g, 'DW = 81 cm', 0, fdY+6, fZ2, 12);
+
+    var fdhX = -W/2+FT+8; 
+    _DL(g, [[fdhX, BY+FT, fZ2], [fdhX, divY, fZ2]]);
+    _DT(g, fdhX, BY+FT, fZ2, 0,1,0); _DT(g, fdhX, divY, fZ2, 0,1,0);
+    _DS(g, 'DH = 33.5 cm', fdhX+12, BY+FT+DH/2, fZ2, 14);
+
+    var lx=-W/2+FT+8; 
+    var lcdYt=PY2+2, lcdYb=PY2-2, lcdXl=lx-5, lcdXr=lx+5;
+    
+    var lcdWy = PY2 + 8; 
+    _DL(g, [[lcdXl, lcdYt, fZ2], [lcdXl, lcdWy, fZ2]], 1);
+    _DL(g, [[lcdXr, lcdYt, fZ2], [lcdXr, lcdWy, fZ2]], 1);
+    _DL(g, [[lcdXl, lcdWy, fZ2], [lcdXr, lcdWy, fZ2]]);
+    _DT(g, lcdXl, lcdWy, fZ2, 0,1,0); _DT(g, lcdXr, lcdWy, fZ2, 0,1,0);
+    _DS(g, 'LCD W=10', lx, lcdWy+7, fZ2, 10);
+
+    var lcdHx = lx - 12; 
+    _DL(g, [[lcdXl, lcdYb, fZ2], [lcdHx, lcdYb, fZ2]], 1);
+    _DL(g, [[lcdXl, lcdYt, fZ2], [lcdHx, lcdYt, fZ2]], 1);
+    _DL(g, [[lcdHx, lcdYb, fZ2], [lcdHx, lcdYt, fZ2]]);
+    _DT(g, lcdHx, lcdYb, fZ2, 1,0,0); _DT(g, lcdHx, lcdYt, fZ2, 1,0,0);
+    _DS(g, 'LCD H=4', lcdHx-9, PY2, fZ2, 10);
+
+    _addFH(g);
+  })(dimGroups.front);
+
+  // ── BACK ──
+  (function(g){
+    var bkZ=-D/2;
+    _DL(g,[[-W/2,BY,bkZ],[-W/2,_wYb,bkZ-_o]],1); _DL(g,[[W/2,BY,bkZ],[W/2,_wYb,bkZ-_o]],1);
+    _DL(g,[[-W/2,_wYb,bkZ-_o],[W/2,_wYb,bkZ-_o]]);
+    _DT(g,-W/2,_wYb,bkZ-_o,1,0,0); _DT(g,W/2,_wYb,bkZ-_o,1,0,0);
+    _DS(g,'W = 86 cm',0,_wYb,bkZ-_o-4);
+
+    var hX=W/2+_o;
+    _DL(g,[[W/2,BY,bkZ],[hX+4,BY,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[hX+4,TY,bkZ]],1);
+    _DL(g,[[hX+2,BY,bkZ],[hX+2,TY,bkZ]]);
+    _DT(g,hX+2,BY,bkZ,0,1,0); _DT(g,hX+2,TY,bkZ,0,1,0);
+    _DS(g,'H = 51 cm',hX+14,0,bkZ);
+
+    var pX=W/2+_o*2.6;
+    _DL(g,[[W/2,TY-PH,bkZ],[pX+4,TY-PH,bkZ]],1); _DL(g,[[W/2,TY,bkZ],[pX+4,TY,bkZ]],1);
+    _DL(g,[[pX+2,TY-PH,bkZ],[pX+2,TY,bkZ]]);
+    _DT(g,pX+2,TY-PH,bkZ,0,1,0); _DT(g,pX+2,TY,bkZ,0,1,0);
+    _DS(g,'PH = 12.5 cm',pX+16,TY-PH/2,bkZ,14);
+
+    var doorMidY = BY + FT + DH*0.75; 
+    var dRx = W/2 - FT;
+    _DL(g, [[0, BY+FT, bkZ], [0, doorMidY, bkZ]], 1);
+    _DL(g, [[dRx, BY+FT, bkZ], [dRx, doorMidY, bkZ]], 1);
+    _DL(g, [[0, doorMidY, bkZ], [dRx, doorMidY, bkZ]]);
+    _DT(g, 0, doorMidY, bkZ, 1, 0, 0); _DT(g, dRx, doorMidY, bkZ, 1, 0, 0);
+    _DS(g, 'DW = 40.5 cm', dRx/2, doorMidY + 6, bkZ, 14);
+
+    var bdhX = -W/2+FT+8; 
+    _DL(g, [[bdhX, BY+FT, bkZ], [bdhX, divY, bkZ]]);
+    _DT(g, bdhX, BY+FT, bkZ, 0,1,0); _DT(g, bdhX, divY, bkZ, 0,1,0);
+    _DS(g, 'DH = 33.5 cm', bdhX+12, BY+FT+DH/2, bkZ, 14);
+
+    _addFH(g);
+  })(dimGroups.back);
+
+  // ── LEFT ──
+  (function(g){
+    var lX=-W/2;
+    var hZ=D/2+_o;
+    _DL(g,[[lX,BY,D/2],[lX,BY,hZ+4]],1); _DL(g,[[lX,TY,D/2],[lX,TY,hZ+4]],1);
+    _DL(g,[[lX,BY,hZ+2],[lX,TY,hZ+2]]);
+    _DT(g,lX,BY,hZ+2,0,1,0); _DT(g,lX,TY,hZ+2,0,1,0);
+    _DS(g,'H = 51 cm',lX,0,hZ+12);
+
+    var dYY=BY-_o;
+    _DL(g,[[lX,BY,-D/2],[lX,dYY,-D/2]],1); _DL(g,[[lX,BY,D/2],[lX,dYY,D/2]],1);
+    _DL(g,[[lX,dYY,-D/2],[lX,dYY,D/2]]);
+    _DT(g,lX,dYY,-D/2,0,0,1); _DT(g,lX,dYY,D/2,0,0,1);
+    _DS(g,'D = 40.5 cm',lX,dYY-6,0);
+
+    var pZ=D/2+_o*2.6;
+    _DL(g,[[lX,TY-PH,D/2],[lX,TY-PH,pZ+4]],1); _DL(g,[[lX,TY,D/2],[lX,TY,pZ+4]],1);
+    _DL(g,[[lX,TY-PH,pZ+2],[lX,TY,pZ+2]]);
+    _DT(g,lX,TY-PH,pZ+2,0,1,0); _DT(g,lX,TY,pZ+2,0,1,0);
+    _DS(g,'PH = 12.5 cm',lX,TY-PH/2,pZ+14,14);
+
+_addFH(g);
+// ── Platform dims (left side view) ──
+    var _plZa = pHingeZ - PD/2;
+    var _plZb = pHingeZ + PD/2;
+    var _plYbot = pHingeY - PT;
+    var _plYtop = pHingeY;
+    var _plYrim = pHingeY + BH;
+    // Depth (Z span): witness from rim top, dim line above
+    var _dY = _plYrim + 10;
+    _DL(g,[[lX,_plYrim,_plZa],[lX,_dY,_plZa]],1);
+    _DL(g,[[lX,_plYrim,_plZb],[lX,_dY,_plZb]],1);
+    _DL(g,[[lX,_dY,_plZa],[lX,_dY,_plZb]]);
+    _DT(g,lX,_dY,_plZa,0,0,1); _DT(g,lX,_dY,_plZb,0,0,1);
+    _DS(g,'Plat = 12.7 cm',lX,_dY+8,pHingeZ,12);
+    // Slab thickness: witness from slab bottom & top, dim line off front edge
+    var _fZ = _plZa - 8;
+    _DL(g,[[lX,_plYbot,_plZa],[lX,_plYbot,_fZ]],1);
+    _DL(g,[[lX,_plYtop,_plZa],[lX,_plYtop,_fZ]],1);
+    _DL(g,[[lX,_plYbot,_fZ],[lX,_plYtop,_fZ]]);
+    _DT(g,lX,_plYbot,_fZ,0,1,0); _DT(g,lX,_plYtop,_fZ,0,1,0);
+    _DS(g,'Slab = 2.54 cm',lX,(_plYbot+_plYtop)/2,_fZ-11,11);
+    // Rim height: witness from slab top & rim top, dim line further off front
+    var _fZ2 = _plZa - 22;
+    _DL(g,[[lX,_plYtop,_plZa],[lX,_plYtop,_fZ2]],1);
+    _DL(g,[[lX,_plYrim,_plZa],[lX,_plYrim,_fZ2]],1);
+    _DL(g,[[lX,_plYtop,_fZ2],[lX,_plYrim,_fZ2]]);
+    _DT(g,lX,_plYtop,_fZ2,0,1,0); _DT(g,lX,_plYrim,_fZ2,0,1,0);
+    _DS(g,'Rim = 2.54 cm',lX,(_plYtop+_plYrim)/2,_fZ2-11,11);
+  })(dimGroups.left);
+
+  // ── RIGHT ──
+  (function(g){
+    var rX2=W/2;
+    var hZ=D/2+_o;
+    _DL(g,[[rX2,BY,D/2],[rX2,BY,hZ+4]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,hZ+4]],1);
+    _DL(g,[[rX2,BY,hZ+2],[rX2,TY,hZ+2]]);
+    _DT(g,rX2,BY,hZ+2,0,1,0); _DT(g,rX2,TY,hZ+2,0,1,0);
+    _DS(g,'H = 51 cm',rX2,0,hZ+12);
+
+    var dYY=BY-_o;
+    _DL(g,[[rX2,BY,-D/2],[rX2,dYY,-D/2]],1); _DL(g,[[rX2,BY,D/2],[rX2,dYY,D/2]],1);
+    _DL(g,[[rX2,dYY,-D/2],[rX2,dYY,D/2]]);
+    _DT(g,rX2,dYY,-D/2,0,0,1); _DT(g,rX2,dYY,D/2,0,0,1);
+    _DS(g,'D = 40.5 cm',rX2,dYY-6,0);
+
+    var pZ=D/2+_o*2.6;
+    _DL(g,[[rX2,TY-PH,D/2],[rX2,TY-PH,pZ+4]],1); _DL(g,[[rX2,TY,D/2],[rX2,TY,pZ+4]],1);
+    _DL(g,[[rX2,TY-PH,pZ+2],[rX2,TY,pZ+2]]);
+    _DT(g,rX2,TY-PH,pZ+2,0,1,0); _DT(g,rX2,TY,pZ+2,0,1,0);
+_DS(g,'PH = 12.5 cm',rX2,TY-PH/2,pZ+14,14);
+ // ── Platform dims (right side view) ──
+    var _plZa2 = pHingeZ - PD/2;
+    var _plZb2 = pHingeZ + PD/2;
+    var _plYbot2 = pHingeY - PT;
+    var _plYtop2 = pHingeY;
+    var _plYrim2 = pHingeY + BH;
+    // Depth (Z span): witness from rim top, dim line above
+    var _dY2 = _plYrim2 + 10;
+    _DL(g,[[rX2,_plYrim2,_plZa2],[rX2,_dY2,_plZa2]],1);
+    _DL(g,[[rX2,_plYrim2,_plZb2],[rX2,_dY2,_plZb2]],1);
+    _DL(g,[[rX2,_dY2,_plZa2],[rX2,_dY2,_plZb2]]);
+    _DT(g,rX2,_dY2,_plZa2,0,0,1); _DT(g,rX2,_dY2,_plZb2,0,0,1);
+    _DS(g,'Plat = 12.7 cm',rX2,_dY2+8,pHingeZ,12);
+    // Slab thickness: witness from slab bottom & top, dim line off front edge
+    var _fZ3 = _plZa2 - 8;
+    _DL(g,[[rX2,_plYbot2,_plZa2],[rX2,_plYbot2,_fZ3]],1);
+    _DL(g,[[rX2,_plYtop2,_plZa2],[rX2,_plYtop2,_fZ3]],1);
+    _DL(g,[[rX2,_plYbot2,_fZ3],[rX2,_plYtop2,_fZ3]]);
+    _DT(g,rX2,_plYbot2,_fZ3,0,1,0); _DT(g,rX2,_plYtop2,_fZ3,0,1,0);
+    _DS(g,'Slab = 2.54 cm',rX2,(_plYbot2+_plYtop2)/2,_fZ3-11,11);
+    // Rim height: witness from slab top & rim top, dim line further off front
+    var _fZ4 = _plZa2 - 22;
+    _DL(g,[[rX2,_plYtop2,_plZa2],[rX2,_plYtop2,_fZ4]],1);
+    _DL(g,[[rX2,_plYrim2,_plZa2],[rX2,_plYrim2,_fZ4]],1);
+    _DL(g,[[rX2,_plYtop2,_fZ4],[rX2,_plYrim2,_fZ4]]);
+    _DT(g,rX2,_plYtop2,_fZ4,0,1,0); _DT(g,rX2,_plYrim2,_fZ4,0,1,0);
+    _DS(g,'Rim = 2.54 cm',rX2,(_plYtop2+_plYrim2)/2,_fZ4-11,11);
+  })(dimGroups.right);
+
+  // ── TOP ──
+  (function(g){
+    var tYY=TY+2;
+    var wZ2=D/2+_o;
+    _DL(g,[[-W/2,TY,D/2],[-W/2,tYY,wZ2]],1); _DL(g,[[W/2,TY,D/2],[W/2,tYY,wZ2]],1);
+    _DL(g,[[-W/2,tYY,wZ2],[W/2,tYY,wZ2]]);
+    _DT(g,-W/2,tYY,wZ2,1,0,0); _DT(g,W/2,tYY,wZ2,1,0,0);
+    _DS(g,'L = 86 cm',0,tYY,wZ2+4);
+
+    var dX2=W/2+_o;
+    _DL(g,[[W/2,TY,-D/2],[dX2+4,tYY,-D/2]],1); _DL(g,[[W/2,TY,D/2],[dX2+4,tYY,D/2]],1);
+    _DL(g,[[dX2+2,tYY,-D/2],[dX2+2,tYY,D/2]]);
+    _DT(g,dX2+2,tYY,-D/2,0,0,1); _DT(g,dX2+2,tYY,D/2,0,0,1);
+    _DS(g,'W = 40.5 cm',dX2+14,tYY,0);
+
+    // ---> Funnel dimensions placed at _fTop <---
+    var mZ = _fZd + 16; 
+    _DL(g, [[_fX-_fMR, _fTop, _fZd+_fMR+1], [_fX-_fMR, _fTop, mZ]], 1);
+    _DL(g, [[_fX+_fMR, _fTop, _fZd+_fMR+1], [_fX+_fMR, _fTop, mZ]], 1);
+    _DL(g, [[_fX-_fMR, _fTop, mZ], [_fX+_fMR, _fTop, mZ]]);
+    _DT(g, _fX-_fMR, _fTop, mZ, 0,0,1); _DT(g, _fX+_fMR, _fTop, mZ, 0,0,1);
+    _DS(g, 'Mouth ∅ 13 cm', _fX, _fTop, mZ+4, 14);
+
+    var tX_off = _fX - 16; 
+    _DL(g, [[_fX-_fMR-1, _fTop, _fZd-_fTR], [tX_off, _fTop, _fZd-_fTR]], 1);
+    _DL(g, [[_fX-_fMR-1, _fTop, _fZd+_fTR], [tX_off, _fTop, _fZd+_fTR]], 1);
+    _DL(g, [[tX_off, _fTop, _fZd-_fTR], [tX_off, _fTop, _fZd+_fTR]]);
+    _DT(g, tX_off, _fTop, _fZd-_fTR, 1,0,0); _DT(g, tX_off, _fTop, _fZd+_fTR, 1,0,0);
+    _DS(g, 'Tube ∅ 6.5 cm', tX_off-8, _fTop, _fZd, 13);
+  })(dimGroups.top);
+
+  // ── BACK OPEN ──
+  (function(g){
+    var bkZ=-D/2;
+    var bYt=BY+FT+3;
+    _DL(g,[[-W/2+FT,BY+FT,bkZ],[-W/2+FT,bYt,bkZ]],1); _DL(g,[[D1X,BY+FT,bkZ],[D1X,bYt,bkZ]],1);
+    _DL(g,[[D2X,BY+FT,bkZ],[D2X,bYt,bkZ]],1); _DL(g,[[W/2-FT,BY+FT,bkZ],[W/2-FT,bYt,bkZ]],1);
+    _DL(g,[[-W/2+FT,bYt,bkZ],[D1X,bYt,bkZ]]); _DL(g,[[D1X,bYt,bkZ],[D2X,bYt,bkZ]]); _DL(g,[[D2X,bYt,bkZ],[W/2-FT,bYt,bkZ]]);
+    _DT(g,-W/2+FT,bYt,bkZ,1,0,0); _DT(g,D1X,bYt,bkZ,1,0,0); _DT(g,D2X,bYt,bkZ,1,0,0); _DT(g,W/2-FT,bYt,bkZ,1,0,0);
+    
+    _DS(g,'B1W = 28.5',(-W/2+FT+D1X)/2,bYt-7,bkZ,13);
+    _DS(g,'B2W = 29',0,bYt-15,bkZ,12); 
+    _DS(g,'B3W = 28.5',(D2X+W/2-FT)/2,bYt-7,bkZ,13);
+
+    [[B1X,tb13,1],[B2X,tb2,2],[B3X,tb13,3]].forEach(function(p){
+      var cx=p[0], cby=p[1], ci=p[2];
+      var dY3=cby+CH/2+3.5; 
+      _DL(g,[[cx-CR,cby+CH/2,bkZ],[cx-CR,dY3,bkZ]],1);
+      _DL(g,[[cx+CR,cby+CH/2,bkZ],[cx+CR,dY3,bkZ]],1);
+      _DL(g,[[cx-CR,dY3,bkZ],[cx+CR,dY3,bkZ]]);
+      _DT(g,cx-CR,dY3,bkZ,0,0,1,1.5); _DT(g,cx+CR,dY3,bkZ,0,0,1,1.5);
+      _DS(g,'C'+ci+' ∅ 20 cm',cx,dY3+6,bkZ,13);
+      
+      var hX3=cx+CR+6; 
+      _DL(g,[[cx+CR,cby-CH/2,bkZ],[hX3+2,cby-CH/2,bkZ]],1);
+      _DL(g,[[cx+CR,cby+CH/2,bkZ],[hX3+2,cby+CH/2,bkZ]],1);
+      _DL(g,[[hX3,cby-CH/2,bkZ],[hX3,cby+CH/2,bkZ]]);
+      _DT(g,hX3,cby-CH/2,bkZ,0,1,0); _DT(g,hX3,cby+CH/2,bkZ,0,1,0);
+      _DS(g,'CH = 20 cm',hX3+13,cby,bkZ,13);
+    });
+  })(dimGroups.backOpen);
+
+  // ── FRONT OPEN ──
+  (function(g){
+    var fZ2 = D/2;
+
+    var topY = TY + 18; 
+    _DL(g,[[-W/2,TY,fZ2],[-W/2,topY,fZ2]],1); 
+    _DL(g,[[W/2,TY,fZ2],[W/2,topY,fZ2]],1);
+    _DL(g,[[-W/2,topY,fZ2],[W/2,topY,fZ2]]);
+    _DT(g,-W/2,topY,fZ2,1,0,0); _DT(g,W/2,topY,fZ2,1,0,0);
+    _DS(g,'Front W = 86 cm',0,topY+5,fZ2, 14);
+
+    var hX = W/2+_o;
+    _DL(g,[[W/2,BY,fZ2],[hX+4,BY,fZ2]],1); _DL(g,[[W/2,TY,fZ2],[hX+4,TY,fZ2]],1);
+    _DL(g,[[hX+2,BY,fZ2],[hX+2,TY,fZ2]]);
+    _DT(g,hX+2,BY,fZ2,0,1,0); _DT(g,hX+2,TY,fZ2,0,1,0);
+    _DS(g,'Front H = 51 cm',hX+14,0,fZ2, 14);
+
+    var tY = BY + FT; 
+    var tZb = FZ; 
+    var tZf = FZ + DH; 
+    var tXl = -W/2 + FT, tXr = W/2 - FT;
+
+    var zLine = tZf + 10; 
+    _DL(g, [[tXl, tY, tZf], [tXl, tY, zLine+1]], 1);
+    _DL(g, [[tXr, tY, tZf], [tXr, tY, zLine+1]], 1);
+    _DL(g, [[tXl, tY, zLine], [tXr, tY, zLine]]);
+    _DT(g, tXl, tY, zLine, 1,0,0); _DT(g, tXr, tY, zLine, 1,0,0);
+    _DS(g, 'Tray L = 81 cm', 0, tY+6, zLine+4, 14);
+
+    var xLine = tXr + 10; 
+    _DL(g, [[tXr, tY, tZb], [xLine+1, tY, tZb]], 1);
+    _DL(g, [[tXr, tY, tZf], [xLine+1, tY, tZf]], 1);
+    _DL(g, [[xLine, tY, tZb], [xLine, tY, tZf]]);
+    _DT(g, xLine, tY, tZb, 0,0,1); _DT(g, xLine, tY, tZf, 0,0,1);
+    _DS(g, 'Tray W = 33.5 cm', xLine+14, tY+6, (tZb+tZf)/2, 16);
+
+  })(dimGroups.frontOpen);
+
+  // ══════════════════════════════════════════════════════════════
+  //  PARTS / PARAMETRIC CALLOUT LABELS   (independent of DIMENSIONS)
+  //  Named component callouts: a label box (full descriptive name +
+  //  its key dimension as secondary text) joined by a leader line and
+  //  an endpoint dot to the actual part.  Toggled by 🏷️ Parts Labels.
+  //  View-keyed like dimGroups — one group per camera preset, each
+  //  containing only the parts relevant from that angle.
+  // ══════════════════════════════════════════════════════════════
+  var partLabelGroups={}, partsLabelsOn=false;
+  ['iso','front','back','left','right','top','backOpen','frontOpen'].forEach(function(v){
+    var gr=new R.Group(); gr.visible=false; root.add(gr); partLabelGroups[v]=gr;
+  });
+
+  // Small filled dot marking the part end of a leader (canvas sprite).
+  function _PLDOT(g,x,y,z){
+    var c=document.createElement('canvas'); c.width=32; c.height=32;
+    var x2=c.getContext('2d');
+    x2.beginPath(); x2.arc(16,16,10,0,Math.PI*2);
+    x2.fillStyle='#1b7a2f'; x2.fill();
+    x2.lineWidth=3; x2.strokeStyle='#ffffff'; x2.stroke();
+    var sp=new R.Sprite(new R.SpriteMaterial(
+      {map:new R.CanvasTexture(c),depthTest:false,transparent:true,sizeAttenuation:true}));
+    sp.position.set(x,y,z); sp.scale.set(1.7,1.7,1);
+    sp.renderOrder=6; g.add(sp);
+  }
+
+  // Two-line callout sprite — follows _DS()'s canvas-texture-sprite
+  // pattern, but draws a bold part NAME on top and a smaller dimension
+  // line below.  Name is always dominant; if dimText is omitted the
+  // name is rendered alone, vertically centered.  Green theme keeps it
+  // visually distinct from the blue dimension labels.
+  function _PLS(g,name,dimText,x,y,z,w){
+    w=(w||16)*1.25;
+    var cw=460, ch=dimText?130:100, pad=40;
+    var cv2=document.createElement('canvas'); cv2.width=cw; cv2.height=ch;
+    var ct=cv2.getContext('2d');
+    ct.fillStyle='rgba(232,245,233,0.96)'; ct.fillRect(0,0,cw,ch);
+    ct.strokeStyle='#1b7a2f'; ct.lineWidth=4; ct.strokeRect(3,3,cw-6,ch-6);
+    ct.textAlign='center'; ct.textBaseline='middle';
+    var fs=36; ct.font='bold '+fs+'px Arial';                 // fit name (dominant)
+    while(ct.measureText(name).width>cw-pad && fs>22){ fs-=2; ct.font='bold '+fs+'px Arial'; }
+    ct.fillStyle='#0e3d17';
+    if(dimText){
+      ct.fillText(name, cw/2, ch*0.37);
+      var ds=28; ct.font=ds+'px Arial';                        // fit dim line (secondary)
+      while(ct.measureText(dimText).width>cw-pad && ds>18){ ds-=2; ct.font=ds+'px Arial'; }
+      ct.fillStyle='#3a6b44';
+      ct.fillText(dimText, cw/2, ch*0.74);
+    } else {
+      ct.fillText(name, cw/2, ch/2);
+    }
+    var sp=new R.Sprite(new R.SpriteMaterial(
+      {map:new R.CanvasTexture(cv2),depthTest:false,transparent:true,sizeAttenuation:true}));
+    sp.position.set(x,y,z); sp.scale.set(w, w*(ch/cw), 1);
+    sp.renderOrder=7; g.add(sp);
+  }
+
+  // One callout = dot at the part + leader (reuses _DL) + label sprite.
+  function _PL(g,name,dimText,px,py,pz,lx2,ly2,lz2,w){
+    _PLDOT(g,px,py,pz);
+    _DL(g,[[px,py,pz],[lx2,ly2,lz2]]);
+    _PLS(g,name,dimText,lx2,ly2,lz2,w);
+  }
+
+  var _FZf=D/2, _BZf=-D/2;     // front / back face planes for label anchors
+
+  // ── ISO  (overview: major externally-visible NAMED components only;
+  //  pure W/H/D measurements live in the Dims tick-mark system) ──
+  (function(g){
+    _PL(g,'Fish Scale Input Funnel','Mouth Ø 13 cm · Height 13 cm',
+      fX, TY+9.75, fZ,               fX+18, _fTop+8, fZ, 16);
+    _PL(g,'Control Panel','Height: 12.5 cm',
+      8, PY2, _FZf,                  W/2+26, PY2+4, _FZf, 16);
+    _PL(g,'Front Oven-Style Door','81 × 33.5 cm',
+      0, -6, FZ,                     -22, BY-14, _FZf, 16);
+    _PL(g,'Stainless Steel Frame','2.5 cm rail · 51 cm tall',
+      cr[3][0], 6, cr[3][1],         W/2+26, -8, _FZf, 16);
+    _PL(g,'Caster Wheels','Ø 5 cm',
+      cr[2][0], BY-WR-2, cr[2][1],   -W/2-20, BY-12, _FZf, 14);
+    _PL(g,'Machine Carrying Handle','Length: 13 cm',
+      W/2+2, hY, 0,                  W/2+26, 22, 0, 15);
+    _PL(g,'Folding Side Platform — Water (Chamber 1)','12.7 × 12.7 cm',
+      W/2, pHingeY, pHingeZ,         W/2+26, BY+2, pHingeZ, 15);
+  })(partLabelGroups.iso);
+
+  // ── FRONT  (named components on the front face; W/H/D via Dims) ──
+  (function(g){
+    var z=_FZf;
+    // Top right
+    _PL(g,'Fish Scale Input Funnel','Mouth Ø 13 cm · Height 13 cm',
+      fX, TY+9.75, fZ,              W/2+16, _fTop+3, fZ, 17);
+    // Left column (top → bottom)
+    _PL(g,'20x4 I2C LCD Display','Width: 10 cm',
+      lx, PY2, FZ,                   -W/2-26, 32, z, 17);
+    _PL(g,'Start / Pause / Resume Button','Ø 2 cm',
+      -16.5, PY2, FZ+1.4,           -W/2-26, 20, z, 17);
+    _PL(g,'Stop / Cleaning Mode Button','Ø 2 cm',
+      -12.5, PY2, FZ+1.4,           -W/2-26, 8, z, 17);
+    _PL(g,'BIOFISH Nameplate','8.5 × 3.2 cm',
+      -22.5, PY2, FZ+0.45,          -W/2-26, -4, z, 16);
+    _PL(g,'Stainless Steel Frame','2.5 cm rail · 51 cm tall',
+      cr[2][0], -4, cr[2][1],       -W/2-26, -16, z, 16);
+    // Right column (top → bottom)
+    _PL(g,'Control Panel','Height: 12.5 cm',
+      10, PY2, z,                    W/2+26, 26, z, 16);
+    _PL(g,'Front Door Support Chains','×2 (engage when open)',
+      W/2-FT, divY, FZ,             W/2+26, 12, z, 16);
+    // Bottom row
+    _PL(g,'Front Oven-Style Door','81 × 33.5 cm',
+      0, -6, FZ,                     -28, BY-16, z, 14);
+    _PL(g,'Hose Dispensing Outlet','Ø 2 cm',
+      B2X, BY+FT+DH*0.09, FZ-2,      4, BY-16, z, 13);
+    _PL(g,'Caster Wheels','Ø 5 cm',
+      cr[3][0], BY-WR-2, cr[3][1],   38, BY-16, z, 13);
+  })(partLabelGroups.front);
+
+  // ── BACK  (doors CLOSED → only what's visible from outside) ──
+  (function(g){
+    var z=_BZf;
+    _PL(g,'Back Double Doors','2 × 40.5 × 33.5 cm',
+      20.25, -6, z,                  W/2+26, BY+2, z, 16);
+    _PL(g,'Circuit Board Panel Door','40.5 × 10 cm',
+      -20.25, 18, z,                 -W/2-26, 30, z, 16);
+    _PL(g,'Ventilation Fan Vents','Ø 7 cm (×2)',
+      -33.5, -13.6, z,               -W/2-26, -2, z, 16);
+    _PL(g,'Processing Chambers (C1–C3)','Open doors to view internals',
+      0, -2, z,                      W/2+26, -14, z, 16);
+  })(partLabelGroups.back);
+
+  // ── BACK OPEN  (doors OPEN → detailed internal chambers/stoves/PCB) ──
+  (function(g){
+    var z=_BZf;
+    _PL(g,'Circuit Board (PCB)','21 × 30.5 cm',
+      -20.25, divY+2, 0,             -W/2-26, 18, z, 16);
+    // Funnel side (+X) = Chamber 1 (Water); switch side (-X) = Chamber 3 (Glycerol)
+    _PL(g,'Processing Chamber 1 — Container','Ø 20 cm · Height 20 cm',
+      B3X, tb13, 0,                  B3X+2, TY+4, z, 15);
+    _PL(g,'Processing Chamber 1 — Stove','21 × 21 cm',
+      B3X, -20, 0,                   W/2+26, -14, z, 15);
+    _PL(g,'Processing Chamber 2 — Container','Ø 20 cm · Height 20 cm',
+      B2X, tb2, 0,                   B2X, TY+13, z, 15);
+    _PL(g,'Processing Chamber 3 — Container','Ø 20 cm · Height 20 cm',
+      B1X, tb13, 0,                  B1X-2, TY+4, z, 15);
+    _PL(g,'Processing Chamber 3 — Stove','21 × 21 cm',
+      B1X, -20, 0,                   -W/2-26, -14, z, 15);
+    _PL(g,'Bay Divider Panels','31.5 × 30.5 cm (×2)',
+      D2X, -7, 0,                    W/2+26, BY-12, z, 16);
+  })(partLabelGroups.backOpen);
+
+  // ── LEFT view  (camera rotates the +X face to view = GLYCEROL /
+  //  Chamber-3 side, where the funnel is).  Shows that side's parts. ──
+  (function(g){
+    // screen-x = -localZ, screen-y = localY ; depth (toward cam) = +localX
+    // Right screen column  → lz=-33 ; Left screen column → lz=+33
+    _PL(g,'Fish Scale Input Funnel — Mouth','Ø 13 cm (wide intake)',
+      fX, TY+9.75, fZ,              44, 35, -33, 15);
+    _PL(g,'Funnel Neck (Tapered)','Ø 13 cm → Ø 6.5 cm',
+      fX, TY+3.0, fZ,              44, 23, -33, 15);
+    _PL(g,'Funnel Drop Tube','Ø 6.5 cm (uniform)',
+      fX, fTubeCY, fZ,            44, 11, -33, 15);
+    _PL(g,'Ventilation Slots','3 slots · 7.5 cm wide',
+      W/2-FT, -13.32, D/5,         44, -3, -33, 15);
+    _PL(g,'Machine Carrying Handle','Length: 13 cm',
+      45, hY, 0,                   44, 23, 33, 15);
+    _PL(g,'Side Hose Mount / Port','Ø 2 cm',
+      W/2-FT/2, -4.08, D/5,        44, 9, 33, 15);
+    _PL(g,'Folding Side Platform — Water Container','Serves Processing Chamber 1',
+      W/2, pHingeY, pHingeZ,       44, -7, 33, 15);
+    _PL(g,'Platform Support Stand','Height: 5.08 cm',
+      W/2, pHingeY-PT-SH/2, pHingeZ, 44, -21, 33, 14);
+  })(partLabelGroups.left);
+
+  // ── RIGHT view  (camera rotates the -X face to view = WATER /
+  //  Chamber-1 side, where the rocker switch is). ──
+  (function(g){
+    var x=-W/2;
+    _PL(g,'Rocker Power Switch','1.5 × 2.3 cm',
+      swX, swY, swZ,               x-26, TY+6, swZ-16, 15);
+    _PL(g,'Machine Carrying Handle','Length: 13 cm',
+      -45, hY, 0,                  x-26, hY+12, -D/2-18, 15);
+    _PL(g,'Side Hose Mount / Port','Ø 2 cm',
+      -W/2+FT/2, -4.08, D/5,       x-26, -2, D/2+24, 15);
+    _PL(g,'Ventilation Slots','3 slots · 7.5 cm wide',
+      -W/2+FT, -13.32, -D/5,       x-26, -16, -D/2-18, 15);
+    _PL(g,'Folding Side Platform — Glycerol Container','Serves Processing Chamber 3',
+      x, pHingeY, pHingeZ,         x-22, BY-2, D/2+22, 15);
+    _PL(g,'Platform Support Stand','Height: 5.08 cm',
+      x, pHingeY-PT-SH/2, pHingeZ, x-22, BY-14, D/2+22, 14);
+  })(partLabelGroups.right);
+
+  // ── TOP  (plan view: named components only; W/D via Dims) ──
+  (function(g){
+    _PL(g,'Fish Scale Input Funnel','Mouth Ø 13 cm',
+      fX, _fTop, fZ,                fX+20, _fTop, fZ+18, 16);
+    _PL(g,'Top Cover Panel','81 × 35.5 cm',
+      -W/4, TY-T/2, -D/4,           -W/2-18, TY, -D/4, 16);
+  })(partLabelGroups.top);
+
+  // ── FRONT OPEN  (front door open → interior tray + outlet visible) ──
+  (function(g){
+    var z=_FZf;
+    _PL(g,'Processing / Drying Tray','Interior: 81 × 33.5 cm',
+      0, BY+FT+DH/2, FZ-T,          -28, BY-16, z, 15);
+    _PL(g,'Hose Dispensing Outlet','Ø 2 cm',
+      B2X, BY+FT+DH*0.09, FZ-2,     34, BY-16, z, 14);
+    _PL(g,'Front Door Support Chains','×2 (engaged)',
+      W/2-FT, divY, FZ,             W/2+26, 12, z, 15);
+  })(partLabelGroups.frontOpen);
+
+  // ── DEMO ANIMATION ──
+  var demoPlaying=false, demoT=0, demoPhase=-1;
+
+  function _demoSetDoors(f,b,c,p){
+    st.f=f; st.b=b; st.c=c; st.p=p;
+    document.getElementById('bF').textContent ='🚪 Front: '   +(f?'Open':'Closed');
+    document.getElementById('bB').textContent ='🚪 Back: '    +(b?'Open':'Closed');
+    document.getElementById('bC').textContent ='📟 Circuit: ' +(c?'Open':'Closed');
+    document.getElementById('bP').textContent ='📦 Platform: '+(p?'Open':'Folded');
+    ['bF','bB','bC','bP'].forEach(function(id){
+      var s=id==='bF'?f:id==='bB'?b:id==='bC'?c:p;
+      document.getElementById(id).classList.toggle('on',s);
+    });
+    _dimUpdate();
+    _partsLabelUpdate();
+  }
+
+  window.toggleDemo=function(){
+    demoPlaying=!demoPlaying; demoT=0; demoPhase=-1;
+    var btn=document.getElementById('bDemo');
+    btn.textContent=demoPlaying?'⏹ Stop':'▶ Demo';
+    btn.classList.toggle('on',demoPlaying);
+    if(!demoPlaying){
+      _demoSetDoors(false,false,false,false);
+      tX=0.25; tY=-0.5; tZ=1;
+    }
+  };
+
+  // ── CAMERA CONTROLS ──
+  var rX=0.25,rY=-0.5,tX=0.25,tY=-0.5,zm=1,tZ=1;
+  var drag=false,ox=0,oy=0;
+  var st={f:false,b:false,c:false,p:false};
+  var vm={iso:[0.25,-0.5],front:[0.04,0],back:[0.04,Math.PI],
+    left:[0.04,-Math.PI/2],right:[0.04,Math.PI/2],top:[1.45,0]};
+
+  window.sv=function(v,btn){
+    dimCurView=v;
+    tX=vm[v][0]; tY=vm[v][1]; tZ=1;
+    document.querySelectorAll('.b').forEach(function(b){b.classList.remove('on');});
+    if(btn) btn.classList.add('on');
+    _dimUpdate();
+    _partsLabelUpdate();
+  };
+  window.tg=function(k){
+    st[k]=!st[k];
+    var lb={f:'🚪 Front:',b:'🚪 Back:',c:'📟 Circuit:',p:'📦 Platform:'};
+    var id={f:'bF',b:'bB',c:'bC',p:'bP'};
+    document.getElementById(id[k]).textContent=lb[k]+' '+(st[k]?'Open':'Closed');
+    document.getElementById(id[k]).classList.toggle('on',st[k]);
+    if(k==='f'||k==='b'){ _dimUpdate(); _partsLabelUpdate(); }
+  };
+
+  window.tgShadow=function(btn){
+    sun.castShadow=!sun.castShadow;
+    btn.textContent='🌑 Shadow: '+(sun.castShadow?'On':'Off');
+    btn.classList.toggle('on',sun.castShadow);
+  };
+
+  window.tgDim=function(btn){
+    dimOn=!dimOn;
+    btn.textContent='📐 Dims: '+(dimOn?'On':'Off');
+    btn.classList.toggle('on',dimOn);
+    _dimUpdate();
+  };
+
+  function _dimUpdate(){
+    Object.keys(dimGroups).forEach(function(k){ dimGroups[k].visible=false; });
+    if(!dimOn) return;
+    var key=dimCurView;
+    if(key==='back'  && st.b) key='backOpen';
+    if(key==='front' && st.f) key='frontOpen';
+    if(dimGroups[key]) dimGroups[key].visible=true;
+  }
+
+  window.tgParts=function(btn){
+    partsLabelsOn=!partsLabelsOn;
+    btn.textContent='🏷️ Parts Labels: '+(partsLabelsOn?'On':'Off');
+    btn.classList.toggle('on',partsLabelsOn);
+    _partsLabelUpdate();
+  };
+
+  // Mirrors _dimUpdate(): hide every group, then show only the one for
+  // the current camera preset, swapping to the detailed open-door group
+  // when the relevant doors are open (same pattern as the Dims system).
+  function _partsLabelUpdate(){
+    Object.keys(partLabelGroups).forEach(function(k){ partLabelGroups[k].visible=false; });
+    if(!partsLabelsOn) return;
+    var key=partLabelGroups[dimCurView] ? dimCurView : 'iso';
+    if(key==='back'  && st.b) key='backOpen';
+    if(key==='front' && st.f) key='frontOpen';
+    partLabelGroups[key].visible=true;
+  }
+
+  cv.addEventListener('mousedown',function(e){drag=true;ox=e.clientX;oy=e.clientY;cv.style.cursor='grabbing';});
+  window.addEventListener('mouseup',function(){drag=false;cv.style.cursor='grab';});
+  cv.addEventListener('mousemove',function(e){
+    if(!drag)return;
+    tY+=(e.clientX-ox)*0.007; tX+=(e.clientY-oy)*0.007;
+    tX=Math.max(-1.45,Math.min(1.45,tX));
+    ox=e.clientX; oy=e.clientY;
+  });
+  cv.addEventListener('wheel',function(e){
+    tZ*=e.deltaY>0?1.12:0.89;
+    tZ=Math.max(0.32,Math.min(3.5,tZ));
+    e.preventDefault();
+  },{passive:false});
+  var lt=null,lpd=null;
+  cv.addEventListener('touchstart',function(e){
+    lt=e.touches[0];
+    lpd=e.touches.length>1?Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY):null;
+    e.preventDefault();
+  },{passive:false});
+  cv.addEventListener('touchmove',function(e){
+    if(e.touches.length===2&&lpd){
+      var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+        e.touches[0].clientY-e.touches[1].clientY);
+      tZ*=lpd/d; tZ=Math.max(0.32,Math.min(3.5,tZ)); lpd=d;
+    }else if(lt){
+      tY+=(e.touches[0].clientX-lt.clientX)*0.009;
+      tX+=(e.touches[0].clientY-lt.clientY)*0.009;
+      tX=Math.max(-1.45,Math.min(1.45,tX));
+      lt=e.touches[0];
+    }
+    e.preventDefault();
+  },{passive:false});
+
+(function loop(){
+    requestAnimationFrame(loop);
+
+    if(demoPlaying){
+      demoT+=1/60;
+  var ph=
+          demoT<1.5  ? 0 :   // front view — open front door + platforms
+          demoT<3.0  ? 1 :   // swing to left side
+          demoT<4.5  ? 2 :   // swing to back — open back + circuit
+          demoT<6.0  ? 3 :   // swing to right side
+          demoT<7.5  ? 4 :   // close all, back to front
+          demoT<10.0 ? 5 :   // full 360 spin
+          demoT<11.5 ? 6 :   // return to iso
+                      7;    // done
+        if(ph!==demoPhase){
+          demoPhase=ph;
+          if(ph===0){ tX=0.04; tY=0;           tZ=1.0;  _demoSetDoors(true,false,false,true); }
+          if(ph===1){ tX=0.04; tY=-Math.PI/2;  tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===2){ tX=0.04; tY=-Math.PI;    tZ=1.0;  _demoSetDoors(false,true,true,false); }
+          if(ph===3){ tX=0.04; tY=Math.PI/2;   tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===4){ tX=0.04; tY=0;           tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===5){ tX=0.20; tZ=1.15; }
+          if(ph===6){ tX=0.04; tY=0;            tZ=1.0;  _demoSetDoors(false,false,false,false); }
+          if(ph===7){ demoPlaying=false; demoPhase=-1;
+            document.getElementById('bDemo').textContent='▶ Demo';
+            document.getElementById('bDemo').classList.remove('on'); }
+        }
+      var spinStart=7.5;
+              if(ph===5) tY=0-(((demoT-spinStart)/2.5)*Math.PI*2);
+          }
+
+    rX+=(tX-rX)*0.1; rY+=(tY-rY)*0.1; zm+=(tZ-zm)*0.1;
+    fDG.rotation.x +=((st.f?Math.PI/2:0)-fDG.rotation.x)*0.12;
+    bDLG.rotation.y+=((st.b?Math.PI/2:0)-bDLG.rotation.y)*0.12;
+    bDRG.rotation.y+=((-st.b*Math.PI/2)-bDRG.rotation.y)*0.12;
+    cbG.rotation.x +=((-st.c*Math.PI/2)-cbG.rotation.x)*0.12;
+    platLG.rotation.z+=((st.p?0:-Math.PI/2)-platLG.rotation.z)*0.12;
+    platRG.rotation.z+=((st.p?0: Math.PI/2)-platRG.rotation.z)*0.12;
+
+    var ang=fDG.rotation.x;
+    if(ang>0.06){
+      var wY=fHY+cDoorY*Math.cos(ang);
+      var wZ=FZ +cDoorY*Math.sin(ang);
+      updateChain(chainL,-cAncX,cFrmY,FZ,-cAncX,wY,wZ);
+      updateChain(chainR, cAncX,cFrmY,FZ, cAncX,wY,wZ);
+    } else {
+      chainL.visible=false; chainR.visible=false;
+    }
+    root.rotation.x=rX; root.rotation.y=rY;
+    var d=190*zm;
+    cam.position.set(0,d*0.34,d);
+    cam.lookAt(0,5,0);
+    ren.render(scene,cam);
+  })();
+}
+</script>
+</body>
+</html>
