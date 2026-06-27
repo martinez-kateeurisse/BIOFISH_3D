@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>BIOFISH — 3D Preview</title>
+<style>
+  /* Minimal embed: only the model, transparent background so it blends in a card */
+  html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:transparent; }
+  #c { display:block; width:100vw; height:100vh; cursor:grab; touch-action:none; }
+  #c:active { cursor:grabbing; }
+  #ht {
+    position:fixed; bottom:14px; left:50%; transform:translateX(-50%);
+    font:11px/1 sans-serif; color:#5a5a5a; background:rgba(255,255,255,0.55);
+    padding:5px 14px; border-radius:14px; pointer-events:none;
+    transition:opacity .6s; backdrop-filter:blur(2px);
+  }
+  #ht.hide { opacity:0; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ht">Drag to rotate &nbsp;·&nbsp; Scroll to zoom</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+window.addEventListener('load', build);
+
+function build(){
+  var R = THREE;
+  var cv = document.getElementById('c');
+
+  // Transparent renderer so the preview blends into the embedding card
+  var ren = new R.WebGLRenderer({canvas:cv, antialias:true, alpha:true});
+  ren.setPixelRatio(Math.min(devicePixelRatio,2));
+  ren.setClearColor(0x000000, 0);
+
+  var scene = new R.Scene();          // no background / no fog → transparent
+
+  var cam = new R.PerspectiveCamera(38, 1, 0.1, 1000);
+  function resize(){
+    var w=cv.clientWidth, h=cv.clientHeight;
+    ren.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix();
+  }
+  resize(); window.addEventListener('resize', resize);
+
+  // ── LIGHTING ──
+  scene.add(new R.AmbientLight(0xffffff, 0.70));
+  var sun = new R.DirectionalLight(0xffffff, 0.6);
+  sun.position.set(160,240,190);
+  scene.add(sun);
+  var f1=new R.DirectionalLight(0xeef2ff,0.30); f1.position.set(-120,80,-100); scene.add(f1);
+  var f2=new R.DirectionalLight(0xffffff,0.20); f2.position.set(0,50,200);     scene.add(f2);
+  var f3=new R.DirectionalLight(0xffffff,0.20); f3.position.set(0,-80,100);    scene.add(f3);
+
+  // ══════════════════════════════════════════════════════════════
+  //  UNIFIED MATERIAL PALETTE  (consistent shading throughout)
+  // ══════════════════════════════════════════════════════════════
+  function mat(c,me,ro){
+    return new R.MeshStandardMaterial({color:c, metalness:me, roughness:ro});
+  }
+
+  // Primary surfaces
+  var mBody  = mat(0xbec0c3, 0.38, 0.52);
+  var mFrame = mat(0xa4a7ab, 0.50, 0.50);
+  var mDark  = mat(0x0e1012, 0.15, 0.85);
+
+  // Screen & indicators
+  var mLCD   = new R.MeshStandardMaterial({color:0x1a55dd, emissive:0x06102a, roughness:0.40});
+
+  // Switch
+  var mSwWht = new R.MeshStandardMaterial({color:0xf0f0ee, roughness:0.78});
+  var mSwRed = new R.MeshStandardMaterial({color:0xcc2200, roughness:0.80, emissive:0x220000});
+
+  // Caster wheels
+  var mWheel = new R.MeshStandardMaterial({color:0xcc1400, roughness:0.80, metalness:0.10});
+  var mHub   = mat(0x828487, 0.30, 0.75);
+
+  // Mechanical / thermal components
+  var mStove  = mat(0x8c8f92, 0.22, 0.80);
+  var mBurner = mat(0x1e2022, 0.28, 0.80);
+  var mPCB    = new R.MeshStandardMaterial({color:0x1b5e20, roughness:0.8, metalness:0.1});
+
+  // Funnel
+  var mFunnel = new R.MeshStandardMaterial({
+    color:0xc8cacc, metalness:0.60, roughness:0.40, side:R.DoubleSide
+  });
+
+  var root=new R.Group(); scene.add(root);
+
+  function bx(w,h,d,m,x,y,z,g){
+    var me=new R.Mesh(new R.BoxGeometry(w,h,d),m);
+    me.position.set(x,y,z);
+    (g||root).add(me); return me;
+  }
+  function cy(rt,rb,h,sg,m,x,y,z,rx,rz,g){
+    var me=new R.Mesh(new R.CylinderGeometry(rt,rb,h,sg||32),m);
+    me.position.set(x,y,z);
+    if(rx!=null) me.rotation.x=rx;
+    if(rz!=null) me.rotation.z=rz;
+    (g||root).add(me); return me;
+  }
+
+  // ═══════════════════════════════════════════════════════════
+  //  DIMENSIONS
+  // ═══════════════════════════════════════════════════════════
+  var W=86, H=51, D=40.5, T=0.5, PH=12.5, FT=2.5, WR=2.5;
+  var BY=-H/2, TY=H/2;
+  var DH=H-PH-FT*2;
+  var divY=TY-PH-FT;
+
+  var B1W=28.5, B2W=29, B3W=28.5;
+  var B1X=-W/2+B1W/2+1.5;
+  var B2X=-W/2+B1W+B2W/2;
+  var B3X= W/2-B3W/2-1.5;
+  var D1X=-W/2+B1W;
+  var D2X= W/2-B3W;
+
+  var CH=20, CR=10, CCR=10.5;
+  var stoveFloor = BY+T;
+  var stoveTopY  = stoveFloor+1+4;
+  var tb13 = stoveTopY+CH/2+1;
+  var tb2  = stoveFloor+CH/2+1;
+
+  var cr=[
+    [-W/2+FT/2,-D/2+FT/2],[W/2-FT/2,-D/2+FT/2],
+    [-W/2+FT/2, D/2-FT/2],[W/2-FT/2, D/2-FT/2]
+  ];
+  var FZ= D/2-FT-T/2;
+  var BZ=-D/2+FT+T/2;
+  var PY2=TY-(PH+FT)/2;
+
+  // ── FRAME ──
+  cr.forEach(function(c){ bx(FT,H,FT,mFrame,c[0],0,c[1]); });
+  [TY-FT/2, TY-PH-FT/2, BY+FT/2].forEach(function(y){
+    bx(W,FT,FT,mFrame,0,y,-D/2+FT/2); bx(W,FT,FT,mFrame,0,y,D/2-FT/2);
+    bx(FT,FT,D,mFrame,-W/2+FT/2,y,0); bx(FT,FT,D,mFrame,W/2-FT/2,y,0);
+  });
+
+  // ── SHELL ──
+  bx(W-FT*2,T,D-FT*2,mBody,0,TY-T/2,0);
+  bx(W-FT*2,T,D-FT*2,mBody,0,BY+T/2,0);
+
+  // ── SIDE WALLS ──
+  var vBase=BY+H*0.18, sLen=7.5, sR=0.5, sGap=3.0;
+  var wY0=BY+FT, wY1=TY-FT, wZ0=-D/2+FT, wZ1=D/2-FT;
+  function makeWall(mx,vZ){
+    var sh=new R.Shape();
+    sh.moveTo(wZ0,wY0); sh.lineTo(wZ1,wY0);
+    sh.lineTo(wZ1,wY1); sh.lineTo(wZ0,wY1); sh.closePath();
+    for(var i=0;i<3;i++){
+      var cy2=vBase+i*sGap, zc=vZ, h2=new R.Path();
+      h2.moveTo(zc-sLen/2,cy2-sR); h2.lineTo(zc+sLen/2,cy2-sR);
+      h2.absarc(zc+sLen/2,cy2,sR,-Math.PI/2,Math.PI/2,false);
+      h2.lineTo(zc-sLen/2,cy2+sR);
+      h2.absarc(zc-sLen/2,cy2,sR,Math.PI/2,-Math.PI/2,false);
+      h2.closePath(); sh.holes.push(h2);
+    }
+    var geo=new R.ExtrudeGeometry(sh,{depth:T,bevelEnabled:false});
+    var mesh=new R.Mesh(geo,mBody);
+    mesh.rotation.y=Math.PI/2;
+    var xp=mx*(W/2-FT); mesh.position.set(xp-mx*T,0,0);
+    if(mx<0) mesh.scale.x=-1;
+    root.add(mesh);
+  }
+  makeWall( 1,  D/5);
+  makeWall(-1, -D/5);
+
+  // Interior front wall
+  bx(W-FT*2,DH,T,mBody,0,BY+FT+DH/2,FZ-T);
+
+  // ── FRONT PANEL STRIP ──
+  bx(W-FT*2,PH-FT,T,mBody,0,PY2,FZ);
+  bx(W-FT*2-2,PH-FT-2,0.3,mBody,0,PY2,FZ+0.3);
+
+  // LCD
+  var lx=-W/2+FT+8;
+  bx(10,4,0.5,mDark,lx,PY2,FZ+0.3);
+  bx(8.5,3,0.5,mLCD,lx,PY2,FZ+0.6);
+
+  // Buttons
+  for(var i=2;i<4;i++){
+    var bxi=-24.5+i*4;
+    cy(1.0,1.1,1.2,20,mDark,  bxi,PY2,FZ+0.5, Math.PI/2,null);
+    cy(0.85,0.95,1.6,20,mFrame,bxi,PY2,FZ+1.4, Math.PI/2,null);
+  }
+
+  // ── BIOFISH LABEL PLATE ──
+  var _lc=document.createElement('canvas');
+  _lc.width=256; _lc.height=80;
+  var _cx=_lc.getContext('2d');
+  _cx.fillStyle='#c2c4c8';
+  _cx.fillRect(0,0,256,80);
+  _cx.font='bold 46px Arial';
+  _cx.fillStyle='#1a55dd';
+  _cx.textAlign='center';
+  _cx.textBaseline='middle';
+  _cx.fillText('BIOFISH',128,40);
+  var _lt=new R.CanvasTexture(_lc);
+  var mLabelFace=new R.MeshStandardMaterial({map:_lt,roughness:0.50,metalness:0.10});
+  var mPlate=mat(0xc6c8cc,0.22,0.62);
+  var _pg=new R.BoxGeometry(8.5,3.2,0.5);
+  var _pm=new R.Mesh(_pg,[mPlate,mPlate,mPlate,mPlate,mLabelFace,mPlate]);
+  _pm.position.set(-22.5,PY2,FZ+0.45);
+  root.add(_pm);
+
+  // ── FRONT DOOR ──
+  var fHY=BY+FT;
+  var fDG=new R.Group(); fDG.position.set(0,fHY,FZ); root.add(fDG);
+  bx(W-FT*2,DH,T,mBody,0,DH/2,0,fDG);
+
+  // Hose dispensing hole
+  var intWZ=D/2-FT-T*4;
+  cy(0.5,0.5,2.5,12,mDark, B2X,BY+FT+DH*0.09,intWZ-1,   Math.PI/2,null);
+  cy(1.0,1.0,1.2,16,mBody, B2X,BY+FT+DH*0.09,intWZ-1.8, Math.PI/2,null);
+
+  // ── SUPPORT CHAINS ──
+  var mChain=new R.MeshStandardMaterial({color:0xb8b8b8,metalness:0.80,roughness:0.20});
+  var nLk=20, lkR=0.5, lkTR=0.13, lkSp=lkR*1.95;
+  var natLen=nLk*lkSp;
+
+  function mkChain(){
+    var g=new R.Group();
+    for(var i=0;i<nLk;i++){
+      var t=new R.Mesh(new R.TorusGeometry(lkR,lkTR,6,8),mChain);
+      t.position.y=(i-nLk/2+0.5)*lkSp;
+      if(i%2===1) t.rotation.y=Math.PI/2;
+      g.add(t);
+    }
+    g.visible=false; root.add(g); return g;
+  }
+  var chainL=mkChain(), chainR=mkChain();
+
+  var cAncX =W/2-FT;
+  var cDoorY=DH*1;
+  var cFrmY =fHY+cDoorY;
+
+  bx(2.2,2.2,1.4,mFrame,-cAncX,cFrmY,FZ+0.7);
+  bx(2.2,2.2,1.4,mFrame, cAncX,cFrmY,FZ+0.7);
+  bx(2.2,2.2,1.4,mFrame,-cAncX,cDoorY,0.7, fDG);
+  bx(2.2,2.2,1.4,mFrame, cAncX,cDoorY,0.7, fDG);
+
+  var _dir=new R.Vector3(), _yUp=new R.Vector3(0,1,0), _qq=new R.Quaternion();
+  function updateChain(ch,ax,ay,az,bx2,by2,bz2){
+    var dx=bx2-ax,dy=by2-ay,dz=bz2-az;
+    var len=Math.sqrt(dx*dx+dy*dy+dz*dz);
+    if(len<2.0){ ch.visible=false; return; }
+    ch.visible=true;
+    ch.position.set((ax+bx2)/2,(ay+by2)/2,(az+bz2)/2);
+    _dir.set(dx,dy,dz).normalize();
+    _qq.setFromUnitVectors(_yUp,_dir);
+    ch.quaternion.copy(_qq);
+    ch.scale.y=len/natLen;
+  }
+
+  // ── BACK UPPER SECTION ──
+  var HW=W/2-FT;
+  bx(HW,PH-FT,T,mBody,HW/2,PY2,BZ);
+  bx(0.8,PH-FT,0.8,mFrame,0,PY2,BZ-0.4);
+
+  var cbHY=TY-PH;
+  var cbG=new R.Group(); cbG.position.set(-HW/2,cbHY,BZ); root.add(cbG);
+  bx(HW,PH-FT,T,mBody,0,(PH-FT)/2,0,cbG);
+  cy(0.65,0.65,0.8,12,mFrame,0,(PH-FT)*0.55,-0.4,Math.PI/2,null,cbG);
+
+  // Circuit board
+  var pcbCX=-HW/2;
+  var pcbY=divY+T+1.5;
+  bx(21,T*2,D-FT*4-2,mPCB,pcbCX,pcbY,0);
+  [[-5,3],[0,-4],[5,3]].forEach(function(c){
+    bx(3.0,1.5,2.0,mDark,pcbCX+c[0],pcbY+T+0.75,c[1]);
+  });
+
+  // ── BACK DOUBLE DOORS ──
+  var bDY=BY+FT, bdw=HW, fanR=3.5;
+  function mkBackDoor(side){
+    var g=new R.Group();
+    g.position.set(side*(W/2-FT),bDY,BZ);
+    root.add(g);
+    var dc=side*(-bdw/2);
+    bx(bdw,DH,T,mBody,dc,DH/2,0,g);
+    var innerX=dc+(-side)*(bdw/2-0.4);
+    bx(0.8,DH,0.6,mFrame,innerX,DH/2,-0.3,g);
+    var fx=-side*(fanR+3.5), fy=DH*0.28;
+    cy(fanR+0.5,fanR+0.5,T,   28,mBody,fx,fy,0.15, Math.PI/2,null,g);
+    cy(fanR,fanR,T*1.5,        28,mDark,fx,fy,0,    Math.PI/2,null,g);
+    cy(1.0,1.0,T+0.5,          12,mHub, fx,fy,0,    Math.PI/2,null,g);
+    var hx=dc+(-side)*(bdw/2-2);
+    bx(1.8,1.2,1.5,mFrame,hx,DH*0.5,-(T/2+0.75),g);
+    return g;
+  }
+  var bDLG=mkBackDoor(-1), bDRG=mkBackDoor(1);
+
+  // ── STOVE ──
+  [B1X,B3X].forEach(function(sx){
+    [[-8,-8],[-8,8],[8,-8],[8,8]].forEach(function(lp2){
+      bx(1.5,1,1.5,mFrame,sx+lp2[0],stoveFloor+0.5,lp2[1]);
+    });
+    bx(21,4,21,mStove,sx,stoveFloor+1+2,0);
+    [-5,5].forEach(function(boff){
+      var ring=new R.Mesh(new R.TorusGeometry(2.5,0.55,8,24),mBurner);
+      ring.rotation.x=Math.PI/2;
+      ring.position.set(sx+boff,stoveFloor+5.1,0);
+      root.add(ring);
+    });
+  });
+
+  // ── CONTAINERS ×3 ──
+  [[B1X,tb13],[B2X,tb2],[B3X,tb13]].forEach(function(p){
+    var tx=p[0], tb=p[1];
+    cy(CR,CR,CH,32,mBody,tx,tb,0);
+    cy(CR+0.8,CR+0.8,1.0,32,mBody,tx,tb-CH/2-0.5,0);
+    cy(CCR,CCR,1.5,32,mBody,tx,tb+CH/2+0.75,0);
+    cy(1.1,1.1,2.0,16,mFrame,tx,tb+CH/2+2.0,0);
+    bx(4,0.7,0.9,mFrame,tx,tb+CH/2+3.5,0);
+  });
+
+  // Bay divider panels
+  bx(T*2,DH-2,D-FT*4,mBody,D1X,bDY+(DH-2)/2,0);
+  bx(T*2,DH-2,D-FT*4,mBody,D2X,bDY+(DH-2)/2,0);
+
+  // Upper / lower divider sheet
+  bx(W-FT*2,T*2,D-FT*2,mBody,0,divY,0);
+
+  // ── ROCKER SWITCH ──
+  var swX = -(W/2-FT) - 1.5/2;
+  var swY = TY-PH/2;
+  var swZ = -D/2+FT+8;
+  bx(1.5, 2.3, 3.0, mSwWht, swX, swY, swZ);
+  bx(1.2, 1.4, 2.2, mSwWht, swX, swY, swZ);
+  bx(1.5, 0.8, 0.8, mSwRed, swX, swY+0.5, swZ-0.7);
+
+  // Side ports
+  cy(0.5,0.5,T+2,14,mDark,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody,-W/2+FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(0.5,0.5,T+2,14,mDark, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+  cy(1.0,1.0,T+1,16,mBody, W/2-FT/2,BY+H*0.42, D/5,null,Math.PI/2);
+
+  // ── FOLDING SIDE PLATFORMS ──
+  var PW=12.7, PD=12.7, PT=2.54;
+  var SH=5.08, SW=2.54, BT=0.4, BH=2.54;
+  var groundY = BY - 2*WR - 2;
+  var pHingeY = groundY + PT + SH;
+  var pHingeZ = D/5;
+
+  // Left platform
+  var platLG = new R.Group();
+  platLG.position.set(-W/2, pHingeY, pHingeZ);
+  root.add(platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platLG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platLG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(-PW/2,0,0);
+    platLG.add(me);
+  })();
+  platLG.rotation.z = -Math.PI/2;   // start folded
+  var standCY = -PT - SH/2;
+  bx(BT,BH,PD,  mFrame,-PW+BT/2,  BH/2, 0,        platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2, PD/2-BT/2, platLG);
+  bx(PW,BH,BT,  mFrame,-PW/2,     BH/2,-PD/2+BT/2, platLG);
+  bx(SW,SH,SW,  mFrame,-PW+SW/2, standCY, 0,       platLG);
+  bx(SW+0.4,2.54,SW+0.4, mDark,-PW+SW/2,-PT-SH+1.27, 0, platLG);
+
+  // Right platform
+  var platRG = new R.Group();
+  platRG.position.set(W/2, pHingeY, pHingeZ);
+  root.add(platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0,-PD*0.28, Math.PI/2,null,platRG);
+  cy(0.55,0.55,2.8,8,mHub, 0,0, PD*0.28, Math.PI/2,null,platRG);
+  (function(){
+    var inch=2.54, hW=(PW-3*inch)/2, hH=PD-2*inch;
+    var sh=new R.Shape();
+    sh.moveTo(-PW/2,-PD/2); sh.lineTo(PW/2,-PD/2);
+    sh.lineTo(PW/2,PD/2);   sh.lineTo(-PW/2,PD/2); sh.closePath();
+    [[-PW/2+inch,-PW/2+inch+hW],[-PW/2+2*inch+hW,-PW/2+2*inch+2*hW]].forEach(function(xr){
+      var h=new R.Path();
+      h.moveTo(xr[0],-hH/2); h.lineTo(xr[1],-hH/2);
+      h.lineTo(xr[1], hH/2); h.lineTo(xr[0], hH/2); h.closePath();
+      sh.holes.push(h);
+    });
+    var me=new R.Mesh(new R.ExtrudeGeometry(sh,{depth:PT,bevelEnabled:false}),mFrame);
+    me.rotation.x=Math.PI/2; me.position.set(PW/2,0,0);
+    platRG.add(me);
+  })();
+  platRG.rotation.z =  Math.PI/2;   // start folded
+  bx(BT,BH,PD,  mFrame, PW-BT/2,  BH/2, 0,        platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2, PD/2-BT/2, platRG);
+  bx(PW,BH,BT,  mFrame, PW/2,     BH/2,-PD/2+BT/2, platRG);
+  bx(SW,SH,SW,  mFrame, PW-SW/2, standCY, 0,       platRG);
+  bx(SW+0.4,2.54,SW+0.4, mDark, PW-SW/2,-PT-SH+1.27, 0, platRG);
+
+  // ── FUNNEL ──
+  var fX=B3X, fZ=-D/8+5;
+  function fcy(rt,rb,h,x,y,z){
+    var geo=new R.CylinderGeometry(rt,rb,h,36,1,true);
+    var me=new R.Mesh(geo,mFunnel);
+    me.position.set(x,y,z); root.add(me);
+  }
+  var fTubeBot = 5.0;
+  var fTubeTop = TY - 1.0;
+  var fTubeH   = fTubeTop - fTubeBot;
+  var fTubeCY  = (fTubeBot + fTubeTop) / 2;
+  fcy(3.25, 3.25, fTubeH, fX, fTubeCY, fZ);
+  fcy(6.5, 3.25, 7.0, fX, TY+3.0, fZ);
+  fcy(6.5, 6.5, 6.5, fX, TY+9.75, fZ);
+
+  // ── MACHINE HANDLES ──
+  var hY=12, hR=0.65, hLen=13, hOff=2;
+  [[-W/2,-1],[W/2,1]].forEach(function(ws){
+    var wx=ws[0], s=ws[1];
+    var barX=wx+s*hOff;
+    cy(hR,hR,hLen,12,mFrame,barX,hY,0,Math.PI/2,null);
+    cy(hR,hR,hOff,8,mFrame,wx+s*hOff/2,hY,-(hLen/2-1.5),null,Math.PI/2);
+    cy(hR,hR,hOff,8,mFrame,wx+s*hOff/2,hY, (hLen/2-1.5),null,Math.PI/2);
+  });
+
+  // ── CASTER WHEELS ──
+  cr.forEach(function(c){
+    bx(3.5,2.0,3.5,mBody,c[0],BY-1.0,c[1]);
+    cy(0.6,0.6,1.5,10,mHub,  c[0],BY-2.2,c[1]);
+    cy(WR,WR,2,28,mWheel,    c[0],BY-WR-2,c[1],null,Math.PI/2);
+    cy(1.2,1.2,2.2,14,mHub,  c[0],BY-WR-2,c[1],null,Math.PI/2);
+  });
+
+  // ══════════════════════════════════════════════════════════════
+  //  CAMERA CONTROLS  (drag-to-rotate · zoom · auto-rotate)
+  // ══════════════════════════════════════════════════════════════
+  var rX=0.30, rY=-0.60, tX=0.30, tY=-0.60, zm=1.12, tZ=1.12;
+  var drag=false, ox=0, oy=0;
+  var st={f:false,b:false,c:false,p:false};   // doors/platforms closed for the preview
+
+  var autoRotate=true, resumeTimer=null;
+  var prompt=document.getElementById('ht'), promptHidden=false;
+  function userActive(){
+    autoRotate=false;
+    if(!promptHidden){ prompt.classList.add('hide'); promptHidden=true; }
+    clearTimeout(resumeTimer);
+    resumeTimer=setTimeout(function(){ autoRotate=true; }, 2500);
+  }
+
+  cv.addEventListener('mousedown',function(e){drag=true;ox=e.clientX;oy=e.clientY;userActive();});
+  window.addEventListener('mouseup',function(){drag=false;});
+  cv.addEventListener('mousemove',function(e){
+    if(!drag)return;
+    tY+=(e.clientX-ox)*0.007; tX+=(e.clientY-oy)*0.007;
+    tX=Math.max(-1.45,Math.min(1.45,tX));
+    ox=e.clientX; oy=e.clientY;
+    userActive();
+  });
+  cv.addEventListener('wheel',function(e){
+    tZ*=e.deltaY>0?1.12:0.89;
+    tZ=Math.max(0.32,Math.min(3.5,tZ));
+    e.preventDefault(); userActive();
+  },{passive:false});
+  var lt=null,lpd=null;
+  cv.addEventListener('touchstart',function(e){
+    lt=e.touches[0];
+    lpd=e.touches.length>1?Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+      e.touches[0].clientY-e.touches[1].clientY):null;
+    e.preventDefault(); userActive();
+  },{passive:false});
+  cv.addEventListener('touchmove',function(e){
+    if(e.touches.length===2&&lpd){
+      var d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,
+        e.touches[0].clientY-e.touches[1].clientY);
+      tZ*=lpd/d; tZ=Math.max(0.32,Math.min(3.5,tZ)); lpd=d;
+    }else if(lt){
+      tY+=(e.touches[0].clientX-lt.clientX)*0.009;
+      tX+=(e.touches[0].clientY-lt.clientY)*0.009;
+      tX=Math.max(-1.45,Math.min(1.45,tX));
+      lt=e.touches[0];
+    }
+    e.preventDefault(); userActive();
+  },{passive:false});
+
+  (function loop(){
+    requestAnimationFrame(loop);
+
+    if(autoRotate && !drag) tY -= 0.0035;        // gentle auto-rotate
+
+    rX+=(tX-rX)*0.1; rY+=(tY-rY)*0.1; zm+=(tZ-zm)*0.1;
+
+    // doors/platforms settle to their closed/folded rest pose
+    fDG.rotation.x +=((st.f?Math.PI/2:0)-fDG.rotation.x)*0.12;
+    bDLG.rotation.y+=((st.b?Math.PI/2:0)-bDLG.rotation.y)*0.12;
+    bDRG.rotation.y+=((-st.b*Math.PI/2)-bDRG.rotation.y)*0.12;
+    cbG.rotation.x +=((-st.c*Math.PI/2)-cbG.rotation.x)*0.12;
+    platLG.rotation.z+=((st.p?0:-Math.PI/2)-platLG.rotation.z)*0.12;
+    platRG.rotation.z+=((st.p?0: Math.PI/2)-platRG.rotation.z)*0.12;
+
+    var ang=fDG.rotation.x;
+    if(ang>0.06){
+      var wY=fHY+cDoorY*Math.cos(ang);
+      var wZ=FZ +cDoorY*Math.sin(ang);
+      updateChain(chainL,-cAncX,cFrmY,FZ,-cAncX,wY,wZ);
+      updateChain(chainR, cAncX,cFrmY,FZ, cAncX,wY,wZ);
+    } else {
+      chainL.visible=false; chainR.visible=false;
+    }
+    root.rotation.x=rX; root.rotation.y=rY;
+    var d=190*zm;
+    cam.position.set(0,d*0.34,d);
+    cam.lookAt(0,5,0);
+    ren.render(scene,cam);
+  })();
+}
+</script>
+</body>
+</html>
